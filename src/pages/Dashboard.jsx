@@ -2,11 +2,9 @@ import React, { useState } from 'react';
 import {Link} from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import CreateLeagueForm from '../components/CreateLeagueForm';
-import DataTest from '../components/DataTest';
-import WeeklyDataTest from '../components/WeeklyDataTest';
 
 const Dashboard = () => {
-  const { leagues, createLeague, deleteLeague } = useData();
+  const { leagues, createLeague, deleteLeague, clearAllData } = useData();
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   const handleCreateLeague = (name, commissioner) => {
@@ -30,6 +28,12 @@ const Dashboard = () => {
         >
             Create New League
         </button>
+        <button
+            onClick={clearAllData}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+        >
+            Clear All Data
+        </button>
       </div>
     
       {leagues.map((league,index) => (
@@ -50,16 +54,6 @@ const Dashboard = () => {
         </div>
      ))}
 
-                        {/* Data Test Component */}
-                  <div className="mt-8">
-                    <DataTest />
-                  </div>
-                  
-                  {/* Weekly Data Test Component */}
-                  <div className="mt-8">
-                    <WeeklyDataTest />
-                  </div>
-      
       {showCreateForm && (
         <CreateLeagueForm
           onSubmit={handleCreateLeague}

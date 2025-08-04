@@ -11,7 +11,7 @@ const TeamPage = () => {
     const [editingPlayerId, setEditingPlayerId] = useState(null);
     const [editStats, setEditStats] = useState({});
     const [showPlayerSelection, setShowPlayerSelection] = useState(false);
-    const { leagues, getAvailablePlayersForLeague, removePlayerFromTeam } = useData();
+    const { leagues, getAvailablePlayersForLeague, addPlayerToTeam, removePlayerFromTeam } = useData();
     
     let team, league;
     for (const l of leagues) {
@@ -28,8 +28,8 @@ const TeamPage = () => {
     }
 
     const handleAddPlayer = (selectedPlayer) => {
-        // Add player to the team
-        team.players.push(selectedPlayer);
+        // Add player to the team using proper state management
+        addPlayerToTeam(league.id, team.id, selectedPlayer);
         setShowPlayerSelection(false);
     };
 
@@ -100,32 +100,6 @@ const TeamPage = () => {
                                         Remove
                                     </button>
                                 </div>
-                                {editingPlayerId === player.id && (
-                                    <form
-                                        className="m1-4 flex flex-col"
-                                        onSubmit={e => {
-                                            e.preventDefault();
-                                            player.stats = {...editStats}
-                                            setEditingPlayerId(null);
-                                        }}
-                                    >
-                                        <input 
-                                            type="number" 
-                                            placeholder="Passing Yards" 
-                                            value={editStats.passingYards || '-'}
-                                            onChange={e => setEditStats({...editStats, passingYards: Number(e.target.value)})}
-                                            className="mb-1 px-2 py-1 border rounded"
-                                        />
-                                        <input
-                                            type="number"
-                                            placeholder="Passing TD"
-                                            value={editStats.passingTD || ''}
-                                            onChange={e => setEditStats({ ...editStats, passingTD: Number(e.target.value) })}
-                                            className="mb-1 px-2 py-1 border rounded"
-                                        />
-                                        <button type="submit" className="bg-blue-600 text-white px-2 py-1 rounded"> Save</button>
-                                        <button type="button" className="m1-2 text-red-600" onClick={() => setEditingPlayerId(null)}>Cancel</button>
-                                    </form>)}
                             </li>
                         ))}
                     </ul>

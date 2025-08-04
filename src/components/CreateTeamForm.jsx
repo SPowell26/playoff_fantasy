@@ -3,13 +3,42 @@ import React, {useState} from 'react';
 const CreateTeamForm = ({onSubmit, onCancel}) => {
     const [teamName, setTeamName] = useState('');
     const [owner, setOwner] = useState('');
+    const [errors, setErrors] = useState({});
+
+    const validateForm = () => {
+        const newErrors = {};
+        
+        if (!teamName.trim()) {
+            newErrors.teamName = 'Team name is required';
+        } else if (teamName.trim().length < 2) {
+            newErrors.teamName = 'Team name must be at least 2 characters';
+        }
+        
+        if (!owner.trim()) {
+            newErrors.owner = 'Owner name is required';
+        } else if (owner.trim().length < 2) {
+            newErrors.owner = 'Owner name must be at least 2 characters';
+        }
+        
+        return newErrors;
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if(teamName.trim() && owner.trim()) {
-            onSubmit(teamName.trim(), owner.trim());
-            setTeamName('');
-            setOwner('');
+        const newErrors = validateForm();
+        
+        if (Object.keys(newErrors).length === 0) {
+            try {
+                onSubmit(teamName.trim(), owner.trim());
+                setTeamName('');
+                setOwner('');
+                setErrors({});
+            } catch (error) {
+                console.error('Failed to create team:', error);
+                setErrors({ submit: 'Failed to create team. Please try again.' });
+            }
+        } else {
+            setErrors(newErrors);
         }
     };
 
@@ -27,10 +56,15 @@ const CreateTeamForm = ({onSubmit, onCancel}) => {
               type="text"
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                errors.teamName ? 'border-red-500' : 'border-gray-300'
+              }`}
               placeholder="Enter team name"
               required
             />
+            {errors.teamName && (
+              <p className="text-red-500 text-sm mt-1">{errors.teamName}</p>
+            )}
           </div>
           
           <div className="mb-6">
@@ -41,11 +75,22 @@ const CreateTeamForm = ({onSubmit, onCancel}) => {
               type="text"
               value={owner}
               onChange={(e) => setOwner(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                errors.owner ? 'border-red-500' : 'border-gray-300'
+              }`}
               placeholder="Enter owner name"
               required
             />
+            {errors.owner && (
+              <p className="text-red-500 text-sm mt-1">{errors.owner}</p>
+            )}
           </div>
+          
+          {errors.submit && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              {errors.submit}
+            </div>
+          )}
           
           <div className="flex justify-end space-x-3">
             <button

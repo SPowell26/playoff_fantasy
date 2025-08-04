@@ -3,13 +3,42 @@ import React, {useState} from 'react';
 const CreateLeagueForm = ({onSubmit, onCancel}) => {
     const [leagueName, setLeagueName] = useState('');
     const [commissioner, setCommissioner] = useState('');
+    const [errors, setErrors] = useState({});
+
+    const validateForm = () => {
+        const newErrors = {};
+        
+        if (!leagueName.trim()) {
+            newErrors.leagueName = 'League name is required';
+        } else if (leagueName.trim().length < 3) {
+            newErrors.leagueName = 'League name must be at least 3 characters';
+        }
+        
+        if (!commissioner.trim()) {
+            newErrors.commissioner = 'Commissioner name is required';
+        } else if (commissioner.trim().length < 2) {
+            newErrors.commissioner = 'Commissioner name must be at least 2 characters';
+        }
+        
+        return newErrors;
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if ( leagueName.trim() && commissioner.trim()) {
-            onSubmit(leagueName.trim(), commissioner.trim());
-            setLeagueName('');
-            setCommissioner('');
+        const newErrors = validateForm();
+        
+        if (Object.keys(newErrors).length === 0) {
+            try {
+                onSubmit(leagueName.trim(), commissioner.trim());
+                setLeagueName('');
+                setCommissioner('');
+                setErrors({});
+            } catch (error) {
+                console.error('Failed to create league:', error);
+                setErrors({ submit: 'Failed to create league. Please try again.' });
+            }
+        } else {
+            setErrors(newErrors);
         }
     };
 
@@ -28,10 +57,15 @@ const CreateLeagueForm = ({onSubmit, onCancel}) => {
               type="text"
               value={leagueName}
               onChange={(e) => setLeagueName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                errors.leagueName ? 'border-red-500' : 'border-gray-300'
+              }`}
               placeholder="Enter league name"
               required
             />
+            {errors.leagueName && (
+              <p className="text-red-500 text-sm mt-1">{errors.leagueName}</p>
+            )}
           </div>
           
           <div className="mb-6">
@@ -42,11 +76,22 @@ const CreateLeagueForm = ({onSubmit, onCancel}) => {
               type="text"
               value={commissioner}
               onChange={(e) => setCommissioner(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                errors.commissioner ? 'border-red-500' : 'border-gray-300'
+              }`}
               placeholder="Enter commissioner name"
               required
             />
+            {errors.commissioner && (
+              <p className="text-red-500 text-sm mt-1">{errors.commissioner}</p>
+            )}
           </div>
+          
+          {errors.submit && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              {errors.submit}
+            </div>
+          )}
           
           <div className="flex justify-end space-x-3">
             <button
