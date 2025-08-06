@@ -1,12 +1,16 @@
 const express = require('express');
 const router = express.Router();
 
+// Import league rules for defaults
+const { leagueSpecificScoringRules } = require('../../league-rules.js');
+
 // Temporary data storage (we'll replace with database later)
 let leagues = [
   {
     id: 1,
     name: "Playoff Fantasy League",
     commissioner: "John Doe",
+    scoring_rules: leagueSpecificScoringRules(), // Default scoring rules
     teams: [
       {
         id: 1,
@@ -43,7 +47,7 @@ router.get('/:id', (req, res) => {
 // POST create new league
 router.post('/', (req, res) => {
   try {
-    const { name, commissioner } = req.body;
+    const { name, commissioner, scoring_rules } = req.body;
     
     // Basic validation
     if (!name || !commissioner) {
@@ -54,6 +58,7 @@ router.post('/', (req, res) => {
       id: leagues.length + 1,
       name,
       commissioner,
+      scoring_rules: scoring_rules || leagueSpecificScoringRules(), // Use provided rules or defaults
       teams: []
     };
     
@@ -67,7 +72,7 @@ router.post('/', (req, res) => {
 // PUT update league
 router.put('/:id', (req, res) => {
   try {
-    const { name, commissioner } = req.body;
+    const { name, commissioner, scoring_rules } = req.body;
     const leagueIndex = leagues.findIndex(l => l.id === parseInt(req.params.id));
     
     if (leagueIndex === -1) {
@@ -77,7 +82,8 @@ router.put('/:id', (req, res) => {
     leagues[leagueIndex] = {
       ...leagues[leagueIndex],
       name: name || leagues[leagueIndex].name,
-      commissioner: commissioner || leagues[leagueIndex].commissioner
+      commissioner: commissioner || leagues[leagueIndex].commissioner,
+      scoring_rules: scoring_rules || leagues[leagueIndex].scoring_rules
     };
     
     res.json(leagues[leagueIndex]);
