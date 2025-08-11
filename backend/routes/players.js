@@ -1,4 +1,4 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 
 // Import mock data (we'll replace with database later)
@@ -120,4 +120,4 @@ router.get('/top/:limit', (req, res) => {
   }
 });
 
-module.exports = router; 
+export default router; 

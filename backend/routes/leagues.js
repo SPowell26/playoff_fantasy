@@ -1,8 +1,8 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 
 // Import league rules for defaults
-const { leagueSpecificScoringRules } = require('../../league-rules.js');
+import { getDefaultScoringRules } from '../../league-rules.js';
 
 // Temporary data storage (we'll replace with database later)
 let leagues = [
@@ -47,23 +47,46 @@ router.get('/:id', (req, res) => {
 // POST create new league
 router.post('/', (req, res) => {
   try {
-    const { name, commissioner, scoring_rules } = req.body;
+    const { name, commissioner, commissionerEmail, year, scoring_rules } = req.body;
     
     // Basic validation
-    if (!name || !commissioner) {
-      return res.status(400).json({ error: 'Name and commissioner are required' });
+    if (!name || !commissioner || !commissionerEmail) {
+      return res.status(400).json({ error: 'Name, commissioner, and commissioner email are required' });
     }
     
+    // Create the league
     const newLeague = {
       id: leagues.length + 1,
       name,
       commissioner,
-      scoring_rules: scoring_rules || leagueSpecificScoringRules(), // Use provided rules or defaults
+      year: year || new Date().getFullYear(),
+      scoring_rules: scoring_rules || getDefaultScoringRules(),
       teams: []
     };
     
+    // Create first team for commissioner
+    const commissionerTeam = {
+      id: 1,
+      name: `${commissioner}'s Team`,
+      owner: commissioner,
+      players: []
+    };
+    
+    // Add team to league
+    newLeague.teams.push(commissionerTeam);
+    
+    // Add league to storage
     leagues.push(newLeague);
-    res.status(201).json(newLeague);
+    
+    // Return league with commissioner info
+    res.status(201).json({
+      ...newLeague,
+      commissionerInfo: {
+        email: commissionerEmail,
+        name: commissioner,
+        teamId: commissionerTeam.id
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create league' });
   }
@@ -108,4 +131,4 @@ router.delete('/:id', (req, res) => {
   }
 });
 
-module.exports = router; 
+export default router; 

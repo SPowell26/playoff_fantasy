@@ -247,21 +247,21 @@ function getScoringRules(leagueRules = null) {
 }
 
 /**
- * Create new league scoring rules (copy of defaults)
+ * Get default scoring rules for new leagues
  * @returns {Object} Copy of default scoring rules for a new league
  */
-function leagueSpecificScoringRules() {
+function getDefaultScoringRules() {
   return JSON.parse(JSON.stringify(LEAGUE_RULES.scoringRules));
 }
 
 // Export everything for use in the application
-module.exports = {
+export {
   LEAGUE_RULES,
   calculateOffensivePoints,
   calculateDefensivePoints,
   calculateKickerPoints,
   getScoringRules,
-  leagueSpecificScoringRules
+  getDefaultScoringRules
 };
 
 console.log('🏈 League Rules loaded successfully!');
@@ -271,4 +271,4 @@ console.log('- calculateOffensivePoints()');
 console.log('- calculateDefensivePoints()');
 console.log('- calculateKickerPoints()');
 console.log('- getScoringRules()');
-console.log('- leagueSpecificScoringRules()'); 
+console.log('- getDefaultScoringRules()'); 

@@ -1,13 +1,15 @@
-const express = require('express');
-const cors = require('cors');
-require('dotenv').config();
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+dotenv.config();
 
 // Import routes
-const leaguesRouter = require('./routes/leagues');
-const playersRouter = require('./routes/players');
+import leaguesRouter from './routes/leagues.js';
+import playersRouter from './routes/players.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
 
 // Middleware
 app.use(cors()); // Allow requests from React app
@@ -17,10 +19,12 @@ app.use(express.json()); // Parse JSON request bodies
 app.use('/api/leagues', leaguesRouter);
 app.use('/api/players', playersRouter);
 
+
 // Test endpoint
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Express server is running!' });
 });
+
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
