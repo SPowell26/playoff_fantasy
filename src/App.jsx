@@ -4,6 +4,7 @@ import { DataProvider } from './context/DataContext';
 import { YearlyProvider } from './context/YearlyContext';
 import Navigation from './components/Navigation';
 import Dashboard from './pages/Dashboard';
+import CreateLeaguePage from './pages/CreateLeaguePage';
 import TeamPage from './pages/TeamPage';
 import LeaguePage from './pages/LeaguePage';
 
@@ -15,6 +16,7 @@ function App() {
           <Navigation />
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/create-league" element={<CreateLeaguePage />} />
         <Route path="/league/:leagueId" element={<LeaguePage />} />
         <Route path="/team/:teamId" element={<TeamPage />} />
       </Routes>

@@ -1,0 +1,204 @@
+{
+  "endpoint": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+  "description": "Current week status, scores, and game information",
+  "response_structure": {
+    "week": {
+      "number": 2,
+      "text": "Week 2"
+    },
+    "season": {
+      "type": 1,
+      "year": 2025,
+      "name": "2025-26",
+      "description": "2025-26 NFL Preseason",
+      "abbreviation": "2025-26"
+    },
+    "leagues": [
+      {
+        "id": "7",
+        "name": "National Football League",
+        "abbreviation": "NFL",
+        "midsizeName": "NFL",
+        "slug": "nfl",
+        "season": {
+          "year": 2025,
+          "startDate": "2025-08-07T04:00Z",
+          "endDate": "2025-09-01T04:00Z",
+          "displayName": "2025 NFL Preseason",
+          "types": [
+            {
+              "id": 1,
+              "name": "Preseason",
+              "abbreviation": "PRE",
+              "startDate": "2025-08-07T04:00Z",
+              "endDate": "2025-09-01T04:00Z",
+              "hasStandings": false
+            }
+          ]
+        },
+        "calendar": [
+          {
+            "label": "Preseason",
+            "value": "preseason",
+            "startDate": "2025-08-07T04:00Z",
+            "endDate": "2025-09-01T04:00Z"
+          }
+        ],
+        "calendarIsWhitelist": false,
+        "calendarStartDate": "2025-08-07T04:00Z",
+        "calendarEndDate": "2025-09-01T04:00Z",
+        "standings": {
+          "href": "/nfl/standings"
+        }
+      }
+    ],
+    "events": [
+      {
+        "id": "401773001",
+        "date": "2025-08-07T23:00Z",
+        "name": "Indianapolis Colts at Baltimore Ravens",
+        "shortName": "IND @ BAL",
+        "season": {
+          "year": 2025,
+          "type": 1,
+          "name": "2025-26 NFL Preseason"
+        },
+        "competitions": [
+          {
+            "id": "401773001",
+            "date": "2025-08-07T23:00Z",
+            "attendance": 63302,
+            "type": {
+              "id": "1",
+              "text": "Preseason"
+            },
+            "timeValid": true,
+            "neutralSite": false,
+            "boxscoreAvailable": true,
+            "commentaryAvailable": true,
+            "liveAvailable": true,
+            "onWatchESPN": false,
+            "recent": false,
+            "showsOnChannelGuide": false,
+            "status": {
+              "clock": 0.0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": 3,
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            },
+            "format": {
+              "regulation": {
+                "periods": 4,
+                "displayName": "Quarter",
+                "slug": "quarter",
+                "clock": 900.0
+              },
+              "overtime": {
+                "periods": 1,
+                "displayName": "sudden-death",
+                "slug": "sudden-death",
+                "clock": 600.0
+              }
+            },
+            "competitors": [
+              {
+                "id": "33",
+                "type": "team",
+                "order": 0,
+                "homeAway": "home",
+                "winner": true,
+                "team": {
+                  "id": "33",
+                  "location": "Baltimore",
+                  "name": "Ravens",
+                  "abbreviation": "BAL",
+                  "displayName": "Baltimore Ravens",
+                  "shortDisplayName": "Ravens",
+                  "color": "29126f",
+                  "alternateColor": "000000",
+                  "isActive": true,
+                  "venue": {
+                    "id": "1"
+                  },
+                  "links": [
+                    {
+                      "rel": [
+                        "clubhouse"
+                      ],
+                      "href": "http://www.espn.com/nfl/team/_/name/bal/baltimore-ravens",
+                      "text": "Clubhouse"
+                    }
+                  ]
+                },
+                "score": {
+                  "value": 24.0,
+                  "displayValue": "24"
+                },
+                "record": [
+                  {
+                    "name": "overall",
+                    "displayName": "Record Year To Date",
+                    "displayValue": "1-0"
+                  }
+                ],
+                "statistics": [],
+                "linescores": [
+                  {
+                    "value": 7
+                  },
+                  {
+                    "value": 3
+                  },
+                  {
+                    "value": 7
+                  },
+                  {
+                    "value": 7
+                  }
+                ]
+              }
+            ],
+            "notes": [],
+            "headlines": [
+              {
+                "description": "Baltimore Ravens vs. Indianapolis Colts - Game Summary - August 7, 2025 - ESPN",
+                "type": "Recap",
+                "shortLinkText": "Recap"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "key_fields": {
+    "week.number": "Current week number (2)",
+    "week.text": "Week description (Week 2)",
+    "season.type": "Season type (1 = Preseason)",
+    "season.year": "Season year (2025)",
+    "season.name": "Season name (2025-26 NFL Preseason)",
+    "events": "Array of current week games",
+    "events[].id": "Unique game ID",
+    "events[].date": "Game date/time",
+    "events[].name": "Full game name",
+    "events[].shortName": "Abbreviated game name",
+    "events[].competitions[].status.type.state": "Game state (pre, in, post)",
+    "events[].competitions[].status.period": "Current period number",
+    "events[].competitions[].status.clock": "Time remaining in period",
+    "events[].competitions[].competitors": "Teams competing with scores"
+  },
+  "use_cases": [
+    "Current week detection",
+    "Season status monitoring",
+    "Live game tracking",
+    "Week number identification"
+  ]
+}

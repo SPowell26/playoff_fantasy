@@ -1,26 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
+import WeekStatus from '../components/WeekStatus';
+import { useData } from '../context/DataContext';
 
 const Dashboard = () => {
-  const [leagues, setLeagues] = useState([]);
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchLeagues();
-  }, []);
-
-  const fetchLeagues = async () => {
-    try {
-      const response = await fetch('/api/leagues');
-      const leaguesData = await response.json();
-      setLeagues(leaguesData);
-    } catch (error) {
-      console.error('Error fetching leagues:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { leagues } = useData();
+  const currentYear = new Date().getFullYear();
 
   // Group leagues by year
   const leaguesByYear = leagues.reduce((acc, league) => {
@@ -34,14 +19,15 @@ const Dashboard = () => {
   // Sort years in descending order (newest first)
   const sortedYears = Object.keys(leaguesByYear).sort((a, b) => b - a);
 
-  if (loading) return <div className="loading">Loading your leagues...</div>;
-
   return (
     <div className="dashboard">
       <div className="dashboard-header">
         <h1>🏈 Fantasy Playoff Dashboard</h1>
         <p>Manage your fantasy football leagues</p>
       </div>
+
+      {/* Current Week Status */}
+      <WeekStatus />
 
       {/* Create New League Button */}
       <div className="create-league-section">
@@ -81,7 +67,7 @@ const Dashboard = () => {
 
                   <div className="league-actions">
                     <Link 
-                      to={`/leagues/${league.id}`} 
+                      to={`/league/${league.id}`} 
                       className="view-league-button"
                     >
                       👁️ View League
@@ -89,7 +75,7 @@ const Dashboard = () => {
                     
                     {league.year === currentYear && (
                       <Link 
-                        to={`/leagues/${league.id}/manage`} 
+                        to={`/league/${league.id}/manage`} 
                         className="manage-league-button"
                       >
                         ⚙️ Manage

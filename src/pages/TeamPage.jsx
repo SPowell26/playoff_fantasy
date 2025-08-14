@@ -1,57 +1,110 @@
-import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { calculateTeamScore, calculatePlayerScore} from '../utils/calculations';
 import PlayerSelectionForm from '../components/PlayerSelectionForm';
 
-
 const TeamPage = () => {
-    const {teamId} = useParams();
+    const { teamId } = useParams();
+    const navigate = useNavigate();
+    const [team, setTeam] = useState(null);
+    const [league, setLeague] = useState(null);
+    const [loading, setLoading] = useState(true);
     const [showTotal, setShowTotal] = useState(true);
     const [editingPlayerId, setEditingPlayerId] = useState(null);
     const [editStats, setEditStats] = useState({});
     const [showPlayerSelection, setShowPlayerSelection] = useState(false);
-    const { leagues, getAvailablePlayersForLeague, addPlayerToTeam, removePlayerFromTeam } = useData();
-    
-    let team, league;
-    for (const l of leagues) {
-        const found = l.teams.find(t => t.id === teamId);
-        if (found) {
-            team = found;
-            league = l;
-            break;
+    const [currentWeek, setCurrentWeek] = useState(1);
+    const { fetchRealStats, getPlayerWithRealStats } = useData();
+
+    // Fetch team and league data on component mount
+    useEffect(() => {
+        fetchTeamData();
+    }, [teamId]);
+
+    const fetchTeamData = async () => {
+        try {
+            setLoading(true);
+            console.log('🔄 Fetching team data for team ID:', teamId);
+            
+            // Fetch team data (which now includes league info)
+            const response = await fetch(`http://localhost:3001/api/leagues/teams/${teamId}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const teamData = await response.json();
+            console.log('✅ Fetched team data:', teamData);
+            
+            // The backend now returns team with league info
+            setTeam(teamData);
+            setLeague(teamData.league);
+            
+        } catch (error) {
+            console.error('❌ Failed to fetch team data:', error);
+            // Could redirect to league page or show error
+        } finally {
+            setLoading(false);
         }
+    };
+
+    if (loading) {
+        return <div className="mb-4">Loading team data...</div>;
     }
 
     if (!team || !league) {
-        return <div>Team not found</div>
+        return <div className="mb-4">Team not found</div>;
     }
 
     const handleAddPlayer = (selectedPlayer) => {
         // Add player to the team using proper state management
-        addPlayerToTeam(league.id, team.id, selectedPlayer);
+        // This would need to be implemented with backend API
+        console.log('Adding player:', selectedPlayer);
         setShowPlayerSelection(false);
     };
 
     const handleRemovePlayer = (playerId) => {
-        removePlayerFromTeam(league.id, team.id, playerId);
+        // Remove player from team using backend API
+        console.log('Removing player:', playerId);
     };
 
-    const scoringRules = league.settings.scoringRules;
-    const teamTotal = calculateTeamScore(team, scoringRules)
+    const scoringRules = league.scoring_rules || {};
+    
+    // Use real stats for scoring calculations
+    const teamWithRealStats = {
+        ...team,
+        players: (team.players || []).map(player => getPlayerWithRealStats(player.id, currentWeek) || player)
+    };
+    
+    const teamTotal = calculateTeamScore(teamWithRealStats, scoringRules);
     const grouped = {};
-    team.players.forEach(player => {
+    teamWithRealStats.players.forEach(player => {
         if (!grouped[player.position]) grouped[player.position] = [];
         grouped[player.position].push(player);
     });
-    console.log("grouped players:", grouped);
+    console.log("grouped players with real stats:", grouped);
 
-        
-    //placeholder
     return (
         <div className="mb-4">
-            <h1 className='text-2xl font-bold mb-4'>Team Locker Room</h1>
-            {/* Team info and roster here*/}
+            <div className="flex justify-between items-center mb-4">
+                <h1 className='text-2xl font-bold'>Team Locker Room</h1>
+                <button
+                    onClick={() => navigate(`/league/${league.id}`)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+                >
+                    ← Back to League
+                </button>
+            </div>
+            
+            {/* Team Info */}
+            <div className="bg-gray-100 p-4 rounded-lg mb-4">
+                <h2 className="text-xl font-semibold mb-2">{team.name}</h2>
+                <p><strong>Owner:</strong> {team.owner}</p>
+                <p><strong>League:</strong> {league.name}</p>
+                <p><strong>Total Score:</strong> {teamTotal.toFixed(2)}</p>
+            </div>
+
+            {/* Team Actions */}
             <div className="mb-4">
                 <button
                     onClick={() => setShowPlayerSelection(true)}
@@ -60,20 +113,45 @@ const TeamPage = () => {
                     Add Player
                 </button>
             </div>
+
+            {/* Week Selection and Stats Loading */}
             <div className="mb-4">
-            <button 
-                onClick={() => setShowTotal(true)}
-                className={`mr-2 px-3 py-1 rounded ${showTotal ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-            >
-                Total Score
-            </button>
-            <button
-                onClick={() => setShowTotal(false)}
-                className={`px-3 py-1 rounded ${!showTotal ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-                disabled // Disable for now, until you implement weekly logic
-            >
-                Weekly Score
-            </button>   
+                <div className="flex items-center space-x-4 mb-4">
+                    <label className="flex items-center space-x-2">
+                        <span>Week:</span>
+                        <select 
+                            value={currentWeek} 
+                            onChange={(e) => setCurrentWeek(parseInt(e.target.value))}
+                            className="px-3 py-1 border rounded"
+                        >
+                            <option value={1}>1 - Wild Card</option>
+                            <option value={2}>2 - Divisional</option>
+                            <option value={3}>3 - Conference Championship</option>
+                            <option value={4}>4 - Super Bowl</option>
+                        </select>
+                    </label>
+                    <button
+                        onClick={() => fetchRealStats(currentWeek, 2024)}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+                    >
+                        Load Real Stats
+                    </button>
+                </div>
+                
+                <div className="flex space-x-2 mb-4">
+                    <button 
+                        onClick={() => setShowTotal(true)}
+                        className={`px-3 py-1 rounded ${showTotal ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+                    >
+                        Total Score
+                    </button>
+                    <button
+                        onClick={() => setShowTotal(false)}
+                        className={`px-3 py-1 rounded ${!showTotal ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+                    >
+                        Weekly Score
+                    </button>   
+                </div>
             </div>
             
             {Object.keys(grouped).map(position => (
@@ -169,7 +247,7 @@ const TeamPage = () => {
 )}
             {showPlayerSelection && (
                 <PlayerSelectionForm
-                    availablePlayers={getAvailablePlayersForLeague(league.id)}
+                    availablePlayers={[]} // No available players fetched from context here
                     onSubmit={handleAddPlayer}
                     onCancel={() => setShowPlayerSelection(false)}
                 />

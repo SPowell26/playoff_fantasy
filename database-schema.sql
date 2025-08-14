@@ -8,6 +8,7 @@ CREATE TABLE leagues (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     commissioner VARCHAR(255) NOT NULL,
+    commissioner_email VARCHAR(255) NOT NULL,
     year INTEGER NOT NULL, -- Track which year this league is for
     scoring_rules JSONB NOT NULL, -- Store our dynamic scoring rules as JSON
     max_teams INTEGER NOT NULL DEFAULT 12,
@@ -71,8 +72,11 @@ CREATE TABLE team_rosters (
 CREATE TABLE player_stats (
     id SERIAL PRIMARY KEY,
     player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+    league_id INTEGER REFERENCES leagues(id) ON DELETE CASCADE,
+    team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
     week INTEGER NOT NULL, -- Playoff week (1, 2, 3, 4)
     year INTEGER NOT NULL, -- Year of playoffs
+    game_id INTEGER REFERENCES game_schedule(id) ON DELETE CASCADE,
     -- Offensive stats
     passing_yards INTEGER DEFAULT 0,
     passing_touchdowns INTEGER DEFAULT 0,
@@ -173,9 +177,10 @@ CREATE INDEX idx_game_schedule_teams ON game_schedule(home_team, away_team);
 -- ============================================================================
 
 -- Insert a sample league
-INSERT INTO leagues (name, commissioner, year, scoring_rules, max_teams, bench_spots, flex_spots) VALUES (
+INSERT INTO leagues (name, commissioner, commissioner_email, year, scoring_rules, max_teams, bench_spots, flex_spots) VALUES (
     'Playoff Fantasy League',
     'John Doe',
+    'john.doe@example.com',
     2025,
     '{
         "offensive": {
@@ -219,32 +224,32 @@ INSERT INTO league_members (league_id, team_id, user_email, username, role) VALU
 INSERT INTO team_rosters (league_id, team_id, player_id, roster_position) VALUES (1, 1, 1, 'QB');
 
 -- Insert system settings
-INSERT INTO system_settings (current_week, current_year, playoff_started) VALUES (1, 2025, FALSE);
+INSERT INTO system_settings (id, current_week, current_year, playoff_started) VALUES (1, 1, 2025, FALSE);
 
 -- Insert sample playoff schedule for 2025
-INSERT INTO game_schedule (year, week, game_date, home_team, away_team) VALUES
+INSERT INTO game_schedule (id, year, week, game_date, home_team, away_team) VALUES
 -- Wild Card Round (Week 1)
-(2025, 1, '2025-01-11 16:30:00', 'BAL', 'CLE'),
-(2025, 1, '2025-01-11 20:15:00', 'BUF', 'MIA'),
-(2025, 1, '2025-01-12 13:00:00', 'KC', 'PIT'),
-(2025, 1, '2025-01-12 16:30:00', 'HOU', 'IND'),
-(2025, 1, '2025-01-12 20:15:00', 'DAL', 'GB'),
-(2025, 1, '2025-01-13 13:00:00', 'DET', 'LAR'),
-(2025, 1, '2025-01-13 16:30:00', 'SF', 'SEA'),
-(2025, 1, '2025-01-13 20:15:00', 'PHI', 'TB'),
+(1, 2025, 1, '2025-01-11 16:30:00', 'BAL', 'CLE'),
+(2, 2025, 1, '2025-01-11 20:15:00', 'BUF', 'MIA'),
+(3, 2025, 1, '2025-01-12 13:00:00', 'KC', 'PIT'),
+(4, 2025, 1, '2025-01-12 16:30:00', 'HOU', 'IND'),
+(5, 2025, 1, '2025-01-12 20:15:00', 'DAL', 'GB'),
+(6, 2025, 1, '2025-01-13 13:00:00', 'DET', 'LAR'),
+(7, 2025, 1, '2025-01-13 16:30:00', 'SF', 'SEA'),
+(8, 2025, 1, '2025-01-13 20:15:00', 'PHI', 'TB'),
 
 -- Divisional Round (Week 2) - Example matchups
-(2025, 2, '2025-01-18 16:30:00', 'BAL', 'BUF'),
-(2025, 2, '2025-01-18 20:15:00', 'KC', 'HOU'),
-(2025, 2, '2025-01-19 13:00:00', 'DAL', 'DET'),
-(2025, 2, '2025-01-19 16:30:00', 'SF', 'PHI'),
+(9, 2025, 2, '2025-01-18 16:30:00', 'BAL', 'BUF'),
+(10, 2025, 2, '2025-01-18 20:15:00', 'KC', 'HOU'),
+(11, 2025, 2, '2025-01-19 13:00:00', 'DAL', 'DET'),
+(12, 2025, 2, '2025-01-19 16:30:00', 'SF', 'PHI'),
 
 -- Conference Championships (Week 3)
-(2025, 3, '2025-01-25 15:00:00', 'BAL', 'KC'),
-(2025, 3, '2025-01-25 18:30:00', 'DAL', 'SF'),
+(13, 2025, 3, '2025-01-25 15:00:00', 'BAL', 'KC'),
+(14, 2025, 3, '2025-01-25 18:30:00', 'DAL', 'SF'),
 
 -- Super Bowl (Week 4)
-(2025, 4, '2025-02-08 18:30:00', 'BAL', 'DAL');
+(15, 2025, 4, '2025-02-08 18:30:00', 'BAL', 'DAL');
 
 -- Display what we created
 SELECT 'Database schema created successfully!' as status; 

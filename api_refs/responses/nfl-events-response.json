@@ -1,0 +1,145 @@
+{
+  "endpoint": "https://partners.api.espn.com/v2/sports/football/nfl/events?limit=1000",
+  "description": "NFL game events and schedules",
+  "response_structure": {
+    "events": [
+      {
+        "id": "401773001",
+        "date": "2025-08-07T23:00Z",
+        "name": "Indianapolis Colts at Baltimore Ravens",
+        "shortName": "IND @ BAL",
+        "timeValid": true,
+        "competitions": [
+          {
+            "id": "401773001",
+            "date": "2025-08-07T23:00Z",
+            "attendance": 63302,
+            "dateValid": true,
+            "neutralSite": false,
+            "onWatchESPN": false,
+            "wallclockAvailable": true,
+            "highlightsAvailable": true,
+            "competitors": [
+              {
+                "id": "33",
+                "type": "team",
+                "order": 0,
+                "homeAway": "home",
+                "winner": true,
+                "team": {
+                  "id": "33",
+                  "location": "Baltimore",
+                  "name": "Ravens",
+                  "abbreviation": "BAL",
+                  "displayName": "Baltimore Ravens",
+                  "shortDisplayName": "Ravens",
+                  "color": "29126f",
+                  "alternateColor": "000000"
+                },
+                "score": {
+                  "value": 24.0,
+                  "displayValue": "24",
+                  "winner": true
+                },
+                "record": {
+                  "name": "overall",
+                  "displayName": "Record Year To Date",
+                  "displayValue": "1-0"
+                },
+                "displayOrder": 2
+              },
+              {
+                "id": "11",
+                "type": "team",
+                "order": 1,
+                "homeAway": "away",
+                "winner": false,
+                "team": {
+                  "id": "11",
+                  "location": "Indianapolis",
+                  "name": "Colts",
+                  "abbreviation": "IND",
+                  "displayName": "Indianapolis Colts",
+                  "shortDisplayName": "Colts",
+                  "color": "003b75",
+                  "alternateColor": "ffffff"
+                },
+                "score": {
+                  "value": 16.0,
+                  "displayValue": "16",
+                  "winner": false
+                },
+                "record": {
+                  "name": "overall",
+                  "displayName": "Record Year To Date",
+                  "displayValue": "0-1"
+                },
+                "displayOrder": 1
+              }
+            ],
+            "notes": [],
+            "status": {
+              "clock": 0.0,
+              "displayClock": "0:00",
+              "period": 4,
+              "type": {
+                "id": 3,
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final"
+              }
+            },
+            "format": {
+              "regulation": {
+                "periods": 4,
+                "displayName": "Quarter",
+                "slug": "quarter",
+                "clock": 900.0
+              },
+              "overtime": {
+                "periods": 1,
+                "displayName": "sudden-death",
+                "slug": "sudden-death",
+                "clock": 600.0
+              }
+            },
+            "hasDefensiveStats": false,
+            "time": {
+              "value": "2025-08-07T23:00Z",
+              "timeValid": true,
+              "displayValue": "7 ET"
+            }
+          }
+        ]
+      }
+    ],
+    "count": 16,
+    "pageIndex": 1,
+    "pageSize": 1000,
+    "pageCount": 1
+  },
+  "key_fields": {
+    "events": "Array of game events",
+    "events[].id": "Unique event ID",
+    "events[].date": "Game date/time (ISO format)",
+    "events[].name": "Full game name",
+    "events[].shortName": "Abbreviated game name",
+    "events[].competitions": "Array of competitions within the event",
+    "competitions[].competitors": "Array of teams competing",
+    "competitors[].team.abbreviation": "Team abbreviation (BAL, IND, etc.)",
+    "competitors[].score.value": "Team score",
+    "competitors[].homeAway": "home/away designation",
+    "competitions[].status.type.state": "Game state (pre, in, post)",
+    "competitions[].status.period": "Current period number",
+    "competitions[].status.clock": "Time remaining in period"
+  },
+  "use_cases": [
+    "Game scheduling and results",
+    "Playoff bracket building",
+    "Team performance tracking",
+    "Game status monitoring"
+  ]
+}

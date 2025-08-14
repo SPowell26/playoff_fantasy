@@ -1,0 +1,183 @@
+===============================================================================
+                    TROUBLESHOOTING LOG - ESPN API INTEGRATION
+===============================================================================
+Date: August 11, 2025
+Project: Fantasy Playoff Football Application
+Goal: Integrate ESPN API to get real NFL player data and stats
+
+===============================================================================
+                                PROBLEM #1
+===============================================================================
+ISSUE: PostgreSQL Command Line Tool Not Recognized
+ERROR: 'psql' is not recognized as an internal or external command
+ROOT CAUSE: PostgreSQL bin directory not in system PATH
+SOLUTION: Added C:\Program Files\PostgreSQL\17\bin to Windows PATH environment variable
+NOTES: This was a basic Windows environment setup issue
+
+===============================================================================
+                                PROBLEM #2
+===============================================================================
+ISSUE: PostgreSQL Password Authentication Failed
+ERROR: 28P01: password authentication failed for user 'postgres'
+ROOT CAUSE: .env file not being read correctly by dotenv
+DEBUG STEPS: 
+- Added console.log statements to see what was being loaded
+- Confirmed DB_PASSWORD: undefined, PORT: undefined
+- Checked file location and permissions
+SOLUTION: Deleted corrupted .env file and recreated it from scratch using echo commands
+NOTES: Environment files can become corrupted with hidden characters/incorrect encoding
+
+===============================================================================
+                                PROBLEM #3
+===============================================================================
+ISSUE: Environment Variables Not Loading
+SYMPTOMS: DB_PASSWORD: undefined, PORT: undefined
+ROOT CAUSE: Corrupted .env file with hidden characters/incorrect encoding
+DEBUG STEPS: 
+- Added console.log('DB_PASSWORD:', process.env.DB_PASSWORD)
+- Added console.log('PORT:', process.env.PORT)
+- Checked current working directory
+SOLUTION: Recreated .env file from scratch, resolved the corruption issue
+LESSON: Always recreate environment files from scratch if variables aren't loading
+
+===============================================================================
+                                PROBLEM #4
+===============================================================================
+ISSUE: ESPN API Data Import Returning 0 Players
+ERROR: "No athletes data from ESPN API"
+ROOT CAUSE: Using wrong ESPN API endpoint
+INITIAL ENDPOINT: http://site.api.espn.com/apis/site/v2/sports/football/nfl/athletes
+WORKING ENDPOINT: https://partners.api.espn.com/v2/sports/football/nfl/athletes?limit=7000
+SOLUTION: Updated endpoint in backend/routes/players.js
+NOTES: ESPN has multiple API endpoints, some work, some don't
+
+===============================================================================
+                                PROBLEM #5
+===============================================================================
+ISSUE: All Players Being Filtered Out During Import
+ERROR: 0 players imported despite API returning data
+ROOT CAUSE: Filter looking for athlete.status?.type?.name === 'Active' which didn't exist
+DEBUG STEPS: 
+- Added extensive console.log statements throughout data transformation pipeline
+- Traced each step: checking athlete, transforming athlete, filtering player
+- Found that status field was missing from API response
+SOLUTION: 
+- Removed the status filter (return true;)
+- Hardcoded status: 'Active' in transformed player object
+NOTES: Debug logging is crucial for understanding data flow issues
+
+===============================================================================
+                                PROBLEM #6
+===============================================================================
+ISSUE: PowerShell curl Command Syntax Error
+ERROR: InvalidArgument: A parameter cannot be found that matches parameter name 'X'
+ROOT CAUSE: PowerShell's curl is an alias for Invoke-WebRequest and doesn't support -X parameter
+SOLUTION: Used Invoke-RestMethod -Uri "..." -Method POST instead
+NOTES: PowerShell has different syntax than Unix curl - always use Invoke-RestMethod
+
+===============================================================================
+                                PROBLEM #7
+===============================================================================
+ISSUE: Need Detailed Player Stats for 2024-2025 Playoffs
+CHALLENGE: Multiple 404 errors when trying different endpoints
+FAILED ATTEMPTS:
+- https://sports.core.api.espn.com/v3/sports/football/nfl/scoreboard?dates=20250101-20250215 → 404
+- https://sports.core.api.espn.com/v3/sports/football/nfl/scoreboard/{gameId} → 404
+WORKING ENDPOINTS FOUND:
+- https://partners.api.espn.com/v2/sports/football/nfl/events?dates=20250101-20250215 ✅ (game overviews)
+- https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2024/players?view=mBoxscore ✅ (player stats structure)
+- https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2024/players?view=mLiveScoring ✅ (cleaner format)
+NOTES: Need to test endpoints systematically to find working ones
+
+===============================================================================
+                                PROBLEM #8
+===============================================================================
+ISSUE: Stats Objects Appearing Empty in API Responses
+SYMPTOM: "stats": {} (empty objects)
+ROOT CAUSE: PowerShell truncating output, not showing full depth
+SOLUTION: Used ConvertTo-Json -Depth 10 to see full data structure
+NOTES: Data depth matters - always use -Depth parameter for complex JSON
+
+===============================================================================
+                                PROBLEM #9
+===============================================================================
+ISSUE: Need to Decode ESPN's Stat Type IDs
+CURRENT STATUS: Found actual stat values (e.g., "99": 1.0, "100": 2.0) but need to map these to actual stats
+EXAMPLE STATS FOUND:
+{
+  "99": 1.0,
+  "100": 2.0,
+  "107": 1.0,
+  "108": 4.0,
+  "109": 5.0,
+  "110": 1.0,
+  "111": 1.0,
+  "112": 0.5,
+  "155": 1.0,
+  "210": 1.0
+}
+NEXT STEP: Find ESPN's stat type reference documentation
+NOTES: These numbers are ESPN's internal stat type identifiers
+
+===============================================================================
+                                KEY LESSONS LEARNED
+===============================================================================
+1. Environment files can become corrupted - always recreate from scratch if variables aren't loading
+2. PowerShell has different syntax than Unix curl - use Invoke-RestMethod for HTTP requests
+3. ESPN API has multiple endpoints - some work, some don't, need to test systematically
+4. Debug logging is crucial - added extensive console.log statements to trace data flow
+5. Data depth matters - use -Depth parameter to see full JSON structures
+6. API responses can be complex - need to understand the data structure before processing
+7. Always test API endpoints directly before implementing in code
+8. Document working endpoints for future reference
+
+===============================================================================
+                                CURRENT STATUS
+===============================================================================
+✅ SOLVED: 
+- Database connection and setup
+- Player import from ESPN API
+- Basic API endpoint discovery
+- Environment variable configuration
+
+🔄 IN PROGRESS: 
+- Decoding ESPN stat type IDs to get actual player performance data
+- Understanding the complete data structure
+
+🎯 NEXT STEPS: 
+- Find ESPN stat type reference documentation
+- Import playoff game data into database
+- Implement fantasy point calculations
+- Test against manual league results
+
+===============================================================================
+                                WORKING ENDPOINTS
+===============================================================================
+1. PLAYERS: https://partners.api.espn.com/v2/sports/football/nfl/athletes?limit=7000
+2. EVENTS: https://partners.api.espn.com/v2/sports/football/nfl/events?dates=20250101-20250215
+3. BOXSCORE: https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2024/players?view=mBoxscore
+4. LIVE SCORING: https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2024/players?view=mLiveScoring
+
+===============================================================================
+                                DEBUGGING COMMANDS
+===============================================================================
+# Test database connection
+psql -U postgres -d fantasy_playoff_db
+
+# Test ESPN API endpoints
+Invoke-RestMethod -Uri "https://partners.api.espn.com/v2/sports/football/nfl/athletes?limit=7000"
+
+# Test fantasy API views
+Invoke-RestMethod -Uri "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2024/players?view=mLiveScoring"
+
+# See full JSON depth
+$response | ConvertTo-Json -Depth 10
+
+===============================================================================
+                                END OF LOG
+===============================================================================
+This troubleshooting log documents our journey from basic database setup to 
+discovering working ESPN API endpoints for fantasy football data. The key 
+takeaway is that systematic debugging and testing is essential when working 
+with external APIs, especially when dealing with complex data structures and 
+multiple endpoint options. 

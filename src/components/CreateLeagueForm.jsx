@@ -209,7 +209,7 @@ const CreateLeagueForm = ({ onSubmit, onCancel }) => {
         </div>
       </form>
 
-      <style jsx>{`
+      <style>{`
         .create-league-form {
           max-width: 500px;
           margin: 0 auto;

@@ -1,0 +1,75 @@
+{
+  "endpoint": "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{{YEAR}}/players?view=mMatchup",
+  "description": "Game-by-game player performance and matchup data",
+  "response_structure": [
+    {
+      "fullName": "Israel Abanikanda",
+      "id": 4429202,
+      "proTeamId": 25,
+      "stats": [
+        {
+          "externalId": "202415",
+          "id": "11202415",
+          "proTeamId": 0,
+          "scoringPeriodId": 15,
+          "seasonId": 2024,
+          "statSourceId": 1,
+          "statSplitTypeId": 1,
+          "stats": {
+            "3": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "7": 0,
+            "8": 0,
+            "9": 0,
+            "10": 0,
+            "11": 0,
+            "12": 0,
+            "13": 0,
+            "14": 0,
+            "15": 0,
+            "16": 0,
+            "17": 0,
+            "18": 0,
+            "19": 0,
+            "20": 0,
+            "23": 0,
+            "24": 0,
+            "25": 0,
+            "26": 0,
+            "35": 0,
+            "36": 0,
+            "42": 0,
+            "43": 0,
+            "44": 0,
+            "45": 0,
+            "46": 0,
+            "53": 0,
+            "58": 0,
+            "63": 0,
+            "68": 0,
+            "72": 0
+          }
+        }
+      ]
+    }
+  ],
+  "key_fields": {
+    "fullName": "Player's full name",
+    "id": "ESPN player ID",
+    "proTeamId": "NFL team ID",
+    "stats": "Array of weekly statistics",
+    "stats[].scoringPeriodId": "Week number (15, 16, etc.)",
+    "stats[].seasonId": "Season year (2024)",
+    "stats[].stats": "Object with ESPN stat IDs and values"
+  },
+  "use_cases": [
+    "Weekly performance analysis",
+    "Matchup-based statistics",
+    "Player consistency tracking",
+    "Game-by-game comparisons",
+    "Weekly fantasy scoring"
+  ]
+}
+

@@ -1,0 +1,96 @@
+{
+  "endpoint": "https://sports.core.api.espn.com/v3/sports/football/nfl/athletes?page=1&limit=20000",
+  "description": "Alternative NFL athletes endpoint (sometimes returns 404)",
+  "response_structure": {
+    "athletes": [
+      {
+        "id": 4429202,
+        "uid": "s:40~l:46~a:4429202",
+        "guid": "4429202",
+        "type": "player",
+        "subType": "player",
+        "isActive": true,
+        "age": 22,
+        "displayName": "Israel Abanikanda",
+        "shortName": "I. Abanikanda",
+        "weight": 220,
+        "height": 71,
+        "jersey": "47",
+        "position": {
+          "abbreviation": "RB",
+          "displayName": "Running Back",
+          "id": "2",
+          "name": "Running Back",
+          "type": "Offense"
+        },
+        "college": {
+          "id": "213",
+          "mascot": "Panthers",
+          "name": "Pittsburgh",
+          "shortName": "Pitt",
+          "abbreviation": "PITT"
+        },
+        "experience": {
+          "yearsInLeague": 2,
+          "yearsOfExperience": 2
+        },
+        "status": {
+          "id": "A",
+          "name": "Active",
+          "type": "Active",
+          "abbreviation": "ACT"
+        },
+        "team": {
+          "id": "25",
+          "uid": "s:40~l:46~t:25",
+          "guid": "25",
+          "type": "team",
+          "abbreviation": "GB",
+          "displayName": "Green Bay Packers",
+          "shortDisplayName": "Packers",
+          "name": "Packers",
+          "location": "Green Bay",
+          "color": "204e32",
+          "alternateColor": "ffb612",
+          "isActive": true
+        }
+      }
+    ],
+    "pagination": {
+      "currentPage": 1,
+      "totalPages": 1,
+      "totalItems": 2000,
+      "itemsPerPage": 20000
+    }
+  },
+  "key_fields": {
+    "athletes": "Array of NFL athletes",
+    "athletes[].id": "ESPN player ID",
+    "athletes[].displayName": "Player's full name",
+    "athletes[].shortName": "Player's abbreviated name",
+    "athletes[].age": "Player's age",
+    "athletes[].weight": "Player's weight in pounds",
+    "athletes[].height": "Player's height in inches",
+    "athletes[].jersey": "Jersey number",
+    "athletes[].position.abbreviation": "Position abbreviation (RB, QB, WR, etc.)",
+    "athletes[].position.displayName": "Full position name",
+    "athletes[].college.name": "College attended",
+    "athletes[].experience.yearsInLeague": "Years in NFL",
+    "athletes[].status.type": "Player status (Active, Injured, etc.)",
+    "athletes[].team.abbreviation": "Team abbreviation (GB, KC, etc.)",
+    "athletes[].team.displayName": "Full team name",
+    "athletes[].team.location": "Team city",
+    "pagination": "Pagination information",
+    "pagination.currentPage": "Current page number",
+    "pagination.totalPages": "Total number of pages",
+    "pagination.totalItems": "Total number of athletes"
+  },
+  "notes": "This endpoint sometimes returns 404 errors. Use as fallback to partners.api.espn.com",
+  "use_cases": [
+    "Alternative player roster source",
+    "Fallback data when primary endpoint fails",
+    "Pagination-based data retrieval",
+    "Large dataset processing"
+  ]
+}
+

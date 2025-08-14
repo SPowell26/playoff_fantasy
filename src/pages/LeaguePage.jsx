@@ -1,37 +1,80 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useData } from '../context/DataContext';
+import CreateTeamForm from '../components/CreateTeamForm';
 
 const LeaguePage = () => {
   const { leagueId } = useParams();
-  const [league, setLeague] = useState(null);
-  const [teams, setTeams] = useState([]);
-  const [isCommissioner, setIsCommissioner] = useState(false);
+  const navigate = useNavigate();
+  const { leagues, createTeam, addTeamToLeague } = useData();
+  
+  // State for spam modal
   const [spamLoading, setSpamLoading] = useState(false);
   const [showSpamModal, setShowSpamModal] = useState(false);
   const [spamMessage, setSpamMessage] = useState('');
   const [spamSubject, setSpamSubject] = useState('');
+  
+  // State for team creation modal
+  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
+  
+  // Find the league from DataContext - handle both string and integer IDs
+  const league = leagues.find(l => l.id == leagueId); // Use == instead of === for type coercion
+  const [teams, setTeams] = useState([]);
+  const [teamsLoading, setTeamsLoading] = useState(false);
+  const isCommissioner = league?.commissioner === 'Current User'; // Replace with actual auth
 
-  useEffect(() => {
-    fetchLeagueData();
-  }, [leagueId]);
+  // Debug logging
+  console.log('🔍 LeaguePage Debug:', {
+    leagueId,
+    leagueIdType: typeof leagueId,
+    leaguesCount: leagues.length,
+    leagues: leagues.map(l => ({ id: l.id, idType: typeof l.id, name: l.name })),
+    foundLeague: league
+  });
 
-  const fetchLeagueData = async () => {
+  // Fetch teams from backend
+  const fetchTeams = async () => {
+    if (!league) return;
+    
     try {
-      const [leagueRes, teamsRes] = await Promise.all([
-        fetch(`/api/leagues/${leagueId}`),
-        fetch(`/api/leagues/${leagueId}/teams`)
-      ]);
+      setTeamsLoading(true);
+      console.log('🔄 Fetching teams for league:', league.id);
       
-      const leagueData = await leagueRes.json();
-      const teamsData = await teamsRes.json();
+      const response = await fetch(`http://localhost:3001/api/leagues/${league.id}/teams`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       
-      setLeague(leagueData);
+      const teamsData = await response.json();
+      console.log('✅ Fetched teams:', teamsData);
       setTeams(teamsData);
-      setIsCommissioner(leagueData.commissioner === 'Current User'); // Replace with actual auth
+      
     } catch (error) {
-      console.error('Error fetching league data:', error);
+      console.error('❌ Failed to fetch teams:', error);
+      setTeams([]);
+    } finally {
+      setTeamsLoading(false);
     }
   };
+
+  // Redirect if league not found and fetch teams
+  useEffect(() => {
+    console.log('🔄 useEffect triggered:', { leagueId, league, leaguesCount: leagues.length });
+    
+    if (!league) {
+      console.error('❌ League not found:', { leagueId, leaguesCount: leagues.length });
+      // Don't redirect immediately - give it a chance to load
+      if (leagues.length > 0) {
+        console.log('⚠️ Leagues exist but this one not found - redirecting');
+        navigate('/');
+      }
+      return;
+    }
+    
+    // Fetch teams when league is found
+    console.log('✅ League found, fetching teams');
+    fetchTeams();
+  }, [league, leagueId, navigate, leagues.length]);
 
   const handleSpamMembers = async () => {
     // Set default message if empty
@@ -142,26 +185,66 @@ const LeaguePage = () => {
          )}
       </div>
 
-      {/* Teams Grid */}
-      <div className="teams-grid">
+      {/* Create Team Section */}
+      <div className="create-team-section">
         <h2>Teams</h2>
-        <div className="teams-container">
-          {teams.map(team => (
-            <div 
-              key={team.id} 
-              className="team-card"
-              onClick={() => window.location.href = `/teams/${team.id}`}
-            >
-              <h3>{team.name}</h3>
-              <p>Owner: {team.owner}</p>
-              <div className="team-stats">
-                <span>Players: {team.player_count || 0}</span>
-                <span>Points: {team.total_points || 0}</span>
-              </div>
-            </div>
-          ))}
-        </div>
+        <button
+          onClick={() => setShowCreateTeamModal(true)}
+          className="create-team-button"
+        >
+          ➕ Create New Team
+        </button>
       </div>
+
+             {/* Teams Grid */}
+       <div className="teams-grid">
+         <h2>Teams ({teams.length})</h2>
+         {teamsLoading ? (
+           <p>Loading teams...</p>
+         ) : teams.length === 0 ? (
+           <p>No teams yet. Create your first team above!</p>
+         ) : (
+           <div className="teams-container">
+             {teams.map(team => (
+               <div 
+                 key={team.id} 
+                 className="team-card"
+                 onClick={() => navigate(`/team/${team.id}`)}
+               >
+                 <h3>{team.name}</h3>
+                 <p>Owner: {team.owner}</p>
+                 <div className="team-stats">
+                   <span>Players: {team.players?.length || 0}</span>
+                   <span>Points: {team.total_points || 0}</span>
+                 </div>
+               </div>
+             ))}
+           </div>
+         )}
+       </div>
+
+             {/* Create Team Modal */}
+       {showCreateTeamModal && (
+         <CreateTeamForm
+           onSubmit={async (teamName, owner) => {
+             try {
+               console.log('🏈 Creating team:', { teamName, owner, leagueId: league.id });
+               const newTeam = await createTeam(teamName, owner, league.id);
+               console.log('✅ Team created:', newTeam);
+               
+               // Refresh teams instead of reloading the page
+               await fetchTeams();
+               
+             } catch (error) {
+               console.error('❌ Failed to create team:', error);
+               alert(`Failed to create team: ${error.message}`);
+             } finally {
+               setShowCreateTeamModal(false);
+             }
+           }}
+           onCancel={() => setShowCreateTeamModal(false)}
+         />
+       )}
 
       <style jsx>{`
         .league-page {
@@ -369,6 +452,39 @@ const LeaguePage = () => {
 
          .cancel-button:hover {
            background-color: #e9ecef;
+         }
+
+         /* Team Creation Styles */
+         .create-team-section {
+           background: white;
+           padding: 25px;
+           border-radius: 12px;
+           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+           margin-bottom: 30px;
+           text-align: center;
+         }
+
+         .create-team-section h2 {
+           margin: 0 0 20px 0;
+           color: #333;
+         }
+
+         .create-team-button {
+           padding: 15px 30px;
+           background-color: #28a745;
+           color: white;
+           border: none;
+           border-radius: 8px;
+           font-size: 16px;
+           cursor: pointer;
+           transition: all 0.3s ease;
+           font-weight: bold;
+         }
+
+         .create-team-button:hover {
+           background-color: #218838;
+           transform: translateY(-2px);
+           box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
          }
 
          .send-button {

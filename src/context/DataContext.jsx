@@ -34,20 +34,43 @@ const saveToStorage = (key, data) => {
 // Provider component
 export function DataProvider({ children }) {
     const [leagues, setLeagues] = useState(() => loadFromStorage(STORAGE_KEYS.LEAGUES, []));
-    const [players] = useState(nflfastrWeeklyMockData.players);
+    const [players, setPlayers] = useState(nflfastrWeeklyMockData.players);
+    const [realStats, setRealStats] = useState({});
     const { currentYear, getPlayoffTeamsForYear } = useYearly();
     
     // Save leagues to localStorage whenever they change
     useEffect(() => {
         saveToStorage(STORAGE_KEYS.LEAGUES, leagues);
     }, [leagues]);
+
+    // Fetch leagues from backend on app startup
+    useEffect(() => {
+        fetchLeagues();
+    }, []);
+
+    // Function to fetch all leagues from backend
+    const fetchLeagues = async () => {
+        try {
+            console.log('🔄 Fetching leagues from backend...');
+            const response = await fetch('http://localhost:3001/api/leagues');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const leaguesData = await response.json();
+            console.log('✅ Fetched leagues from backend:', leaguesData);
+            setLeagues(leaguesData);
+        } catch (error) {
+            console.error('❌ Failed to fetch leagues:', error);
+            // Keep existing leagues from localStorage if fetch fails
+        }
+    };
     
     // Basic function to create a new league
-    const createLeague = (name, commissioner) => {
+    const createLeague = async (name, commissioner, commissionerEmail, year) => {
         try {
             // Validate inputs
-            if (!name || !commissioner) {
-                throw new Error('League name and commissioner are required');
+            if (!name || !commissioner || !commissionerEmail) {
+                throw new Error('League name, commissioner, and commissioner email are required');
             }
             
             if (name.length < 3) {
@@ -58,32 +81,34 @@ export function DataProvider({ children }) {
                 throw new Error('Commissioner name must be at least 2 characters');
             }
             
-            const newLeague = {
-                id: `league_${Date.now()}`,
-                name: name,
-                commissioner: commissioner,
-                status: 'setup',
-                maxTeams: 8,
-                currentTeams: 0,
-                teams: [],
-                settings: {
-                    scoringRules: {
-                        passingYards: 0.04,
-                        passingTD: 4,
-                        interceptions: -2,
-                        rushingYards: 0.1,
-                        rushingTD: 6,
-                        receivingYards: 0.1,
-                        receivingTD: 6,
-                        fumbles: -2
-                    },
-                    playoffTeams: getPlayoffTeamsForYear(currentYear)
-                }
-            };
+            console.log('🏈 Creating league via API:', { name, commissioner, commissionerEmail, year });
             
+            // Create league via backend API - backend will generate the ID
+            const response = await fetch('http://localhost:3001/api/leagues', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name,
+                    commissioner,
+                    commissionerEmail,
+                    year: year || currentYear
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to create league');
+            }
+            
+            const newLeague = await response.json();
+            console.log('✅ League created via API:', newLeague);
+            
+            // Update local state
             setLeagues([...leagues, newLeague]);
-            console.log('League created successfully:', newLeague.id);
             return newLeague;
+            
         } catch (error) {
             console.error('Failed to create league:', error);
             throw error; // Re-throw so the component can handle it
@@ -96,11 +121,11 @@ export function DataProvider({ children }) {
     };
 
     //Function to create a new team
-    const createTeam = (name, owner) => {
+    const createTeam = async (name, owner, leagueId) => {
         try {
             // Validate inputs
-            if (!name || !owner) {
-                throw new Error('Team name and owner are required');
+            if (!name || !owner || !leagueId) {
+                throw new Error('Team name, owner, and league ID are required');
             }
             
             if (name.length < 2) {
@@ -111,17 +136,27 @@ export function DataProvider({ children }) {
                 throw new Error('Owner name must be at least 2 characters');
             }
             
-            const newTeam = {
-                id: `team_${Date.now()}`,
-                name: name,
-                owner: owner,
-                players: [],
-                weeklyScores: [],
-                totalScore: 0
-            };
+            console.log('🏈 Creating team via API:', { name, owner, leagueId });
             
-            console.log('Team created successfully:', newTeam.id);
+            // Create team via backend API - backend will generate the ID
+            const response = await fetch(`http://localhost:3001/api/leagues/${leagueId}/teams`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name, owner })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to create team');
+            }
+            
+            const newTeam = await response.json();
+            console.log('✅ Team created via API:', newTeam);
+            
             return newTeam;
+            
         } catch (error) {
             console.error('Failed to create team:', error);
             throw error; // Re-throw so the component can handle it
@@ -218,9 +253,62 @@ export function DataProvider({ children }) {
             localStorage.removeItem(STORAGE_KEYS.LEAGUES);
         };
 
+        // Function to fetch real playoff stats from backend
+        const fetchRealStats = async (week = 1, year = 2024) => {
+            try {
+                console.log(`🔄 Fetching real stats for week ${week}, year ${year}...`);
+                const response = await fetch(`http://localhost:3001/api/stats/scoring-ready/${week}?year=${year}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log(`✅ Fetched ${data.count} players with real stats:`, data);
+                
+                // Transform the data to match your existing player structure
+                const transformedPlayers = data.players.map(player => ({
+                    ...player,
+                    stats: player.weeklyStats[week] || {} // Extract the week's stats
+                }));
+                
+                setPlayers(transformedPlayers);
+                setRealStats(prev => ({ ...prev, [week]: data }));
+                
+                console.log(`🎯 Transformed ${transformedPlayers.length} players for scoring engine`);
+                return transformedPlayers;
+                
+            } catch (error) {
+                console.error('❌ Failed to fetch real stats:', error);
+                // Fallback to mock data
+                return players;
+            }
+        };
+
+        // Function to get player with real stats for scoring
+        const getPlayerWithRealStats = (playerId, week = 1) => {
+            const player = players.find(p => p.id === playerId);
+            if (!player) return null;
+            
+            // If we have real stats for this week, use them
+            if (realStats[week] && realStats[week].players) {
+                const realPlayer = realStats[week].players.find(p => p.id === playerId);
+                if (realPlayer && realPlayer.weeklyStats[week]) {
+                    return {
+                        ...player,
+                        stats: realPlayer.weeklyStats[week]
+                    };
+                }
+            }
+            
+            // Fallback to existing stats
+            return player;
+        };
+
     const value = {
         leagues,
         players,
+        realStats,
         createLeague,
         deleteLeague,
         createTeam,
@@ -229,7 +317,10 @@ export function DataProvider({ children }) {
         addPlayerToTeam,
         removePlayerFromTeam,
         deleteTeamFromLeague,
-        clearAllData
+        clearAllData,
+        fetchRealStats,
+        getPlayerWithRealStats,
+        fetchLeagues
     };
 
     return (
