@@ -400,6 +400,8 @@ router.get('/:id/teams', async (req, res) => {
   }
 });
 
+
+
 // DELETE league
 router.delete('/:id', async (req, res) => {
   try {

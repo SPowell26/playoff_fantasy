@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { calculateTeamScore, calculatePlayerScore} from '../utils/calculations';
 import PlayerSelectionForm from '../components/PlayerSelectionForm';
+import PlayerStatsModal from '../components/PlayerStatsModal';
 
 const TeamPage = () => {
     const { teamId } = useParams();
@@ -15,12 +16,21 @@ const TeamPage = () => {
     const [editStats, setEditStats] = useState({});
     const [showPlayerSelection, setShowPlayerSelection] = useState(false);
     const [currentWeek, setCurrentWeek] = useState(1);
+    const [selectedPlayerForStats, setSelectedPlayerForStats] = useState(null);
+    const [showPlayerStatsModal, setShowPlayerStatsModal] = useState(false);
     const { fetchRealStats, getPlayerWithRealStats } = useData();
 
     // Fetch team and league data on component mount
     useEffect(() => {
         fetchTeamData();
     }, [teamId]);
+
+    // Fetch team roster after team data is loaded (only once)
+    useEffect(() => {
+        if (team && team.id && !team.players) {
+            fetchTeamRoster();
+        }
+    }, [team?.id]); // Only depend on team ID, not the entire team object
 
     const fetchTeamData = async () => {
         try {
@@ -48,6 +58,30 @@ const TeamPage = () => {
         }
     };
 
+    const fetchTeamRoster = async () => {
+        try {
+            console.log('🔄 Fetching team roster for team ID:', teamId);
+            
+            // Fetch team roster using the new flat RESTful endpoint
+            const response = await fetch(`http://localhost:3001/api/teams/${teamId}/players`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const rosterData = await response.json();
+            console.log('✅ Fetched team roster:', rosterData);
+            
+            // Update team with the roster data
+            setTeam(prevTeam => ({
+                ...prevTeam,
+                players: rosterData
+            }));
+            
+        } catch (error) {
+            console.error('❌ Failed to fetch team roster:', error);
+        }
+    };
+
     if (loading) {
         return <div className="mb-4">Loading team data...</div>;
     }
@@ -56,11 +90,25 @@ const TeamPage = () => {
         return <div className="mb-4">Team not found</div>;
     }
 
-    const handleAddPlayer = (selectedPlayer) => {
-        // Add player to the team using proper state management
-        // This would need to be implemented with backend API
-        console.log('Adding player:', selectedPlayer);
-        setShowPlayerSelection(false);
+    const handleAddPlayer = async (selectedPlayer) => {
+        try {
+            console.log('✅ Player added successfully:', selectedPlayer);
+            setShowPlayerSelection(false);
+            
+            // Refresh team data to show the newly added player
+            await fetchTeamData();
+            
+            // Also fetch the updated roster
+            await fetchTeamRoster();
+            
+        } catch (error) {
+            console.error('❌ Error handling player addition:', error);
+        }
+    };
+
+    const handlePlayerClick = (player) => {
+        setSelectedPlayerForStats(player);
+        setShowPlayerStatsModal(true);
     };
 
     const handleRemovePlayer = (playerId) => {
@@ -160,7 +208,12 @@ const TeamPage = () => {
                     <ul>
                         {grouped[position].map(player => (
                             <li key={player.id} className="flex justify-between items-center border-b py-1">
-                                <span>{player.name}</span>
+                                <span 
+                                    className="cursor-pointer hover:text-blue-600 hover:underline font-medium"
+                                    onClick={() => handlePlayerClick(player)}
+                                >
+                                    {player.name}
+                                </span>
                                 <span>Points: {calculatePlayerScore(player, scoringRules).toFixed(2)}</span>
                                 <div className="flex space-x-2">
                                     <button className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300"
@@ -247,11 +300,20 @@ const TeamPage = () => {
 )}
             {showPlayerSelection && (
                 <PlayerSelectionForm
-                    availablePlayers={[]} // No available players fetched from context here
-                    onSubmit={handleAddPlayer}
-                    onCancel={() => setShowPlayerSelection(false)}
+                    leagueId={league.id}
+                    teamId={team.id}
+                    onPlayerAdded={handleAddPlayer}
                 />
             )}
+
+            {/* Player Stats Modal */}
+            <PlayerStatsModal
+                player={selectedPlayerForStats}
+                isOpen={showPlayerStatsModal}
+                onClose={() => setShowPlayerStatsModal(false)}
+                week={currentWeek}
+                year={2024}
+            />
         </div>
         
     );

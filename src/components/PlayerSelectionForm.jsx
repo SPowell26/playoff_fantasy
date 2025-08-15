@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const PlayerSelectionForm = ({ leagueId, onPlayerAdded }) => {
+const PlayerSelectionForm = ({ leagueId, teamId, onPlayerAdded }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredPlayers, setFilteredPlayers] = useState([]);
   const [allPlayers, setAllPlayers] = useState([]);
@@ -13,18 +13,16 @@ const PlayerSelectionForm = ({ leagueId, onPlayerAdded }) => {
     const fetchPlayers = async () => {
       setLoading(true);
       try {
-        // Get all players from ESPN API
-        const playersResponse = await fetch('/api/players');
+        // Get all players from backend
+        const playersResponse = await fetch('http://localhost:3001/api/players');
         const players = await playersResponse.json();
         
-        // Get already selected players for this league
-        const selectedResponse = await fetch(`/api/leagues/${leagueId}/selected-players`);
-        const selectedPlayers = await selectedResponse.json();
+        // Get already selected players for this league (using existing teams endpoint)
+        const selectedResponse = await fetch(`http://localhost:3001/api/leagues/${leagueId}/teams`);
+        const teams = await selectedResponse.json();
         
-        // Filter out already selected players
-        const available = players.filter(player => 
-          !selectedPlayers.some(selected => selected.player_id === player.id)
-        );
+        // For now, show all players (we'll implement filtering later)
+        const available = players;
         
         setAllPlayers(players);
         setAvailablePlayers(available);
@@ -65,7 +63,7 @@ const PlayerSelectionForm = ({ leagueId, onPlayerAdded }) => {
     if (!selectedPlayer) return;
 
     try {
-      const response = await fetch(`/api/leagues/${leagueId}/teams/1/players`, {
+      const response = await fetch(`http://localhost:3001/api/teams/${teamId}/players`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -16,6 +16,7 @@ import leaguesRouter from './routes/leagues.js';
 import playersRouter from './routes/players.js';
 import statsRouter from './routes/stats.js';
 import statusRouter from './routes/status.js';
+import teamsRouter from './routes/teams.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -52,6 +53,7 @@ app.use('/api/leagues', leaguesRouter);
 app.use('/api/players', playersRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/status', statusRouter);
+app.use('/api/teams', teamsRouter);
 
 
 // Test endpoint
@@ -78,4 +80,5 @@ app.listen(PORT, () => {
   console.log(`👥 Players API: http://localhost:${PORT}/api/players`);
   console.log(`📊 Stats API: http://localhost:${PORT}/api/stats`);
   console.log(`📅 Status API: http://localhost:${PORT}/api/status`);
+  console.log(`🏆 Teams API: http://localhost:${PORT}/api/teams`);
 }); 
