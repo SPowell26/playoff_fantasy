@@ -1,25 +1,31 @@
 import React, { useState, useEffect } from 'react';
+import { useYearly } from '../context/YearlyContext';
 
-const PlayerStatsModal = ({ player, isOpen, onClose, week, year }) => {
+const PlayerStatsModal = ({ player, isOpen, onClose }) => {
   const [playerStats, setPlayerStats] = useState(null);
   const [loading, setLoading] = useState(false);
+  
+  // Get current week/season from context instead of props
+  const { currentWeek, currentYear, seasonType, isPlayoffs } = useYearly();
 
   // Fetch player stats when modal opens
   useEffect(() => {
-    if (isOpen && player) {
+    if (isOpen && player && currentWeek && currentYear) {
       fetchPlayerStats();
     }
-  }, [isOpen, player, week, year]);
+  }, [isOpen, player, currentWeek, currentYear]);
 
   const fetchPlayerStats = async () => {
-    if (!player || !week || !year) return;
+    if (!player || !currentWeek || !currentYear) return;
     
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:3001/api/stats/player/${player.id}?week=${week}&year=${year}`);
+      const response = await fetch(`http://localhost:3001/api/stats/player/${player.id}?week=${currentWeek}&year=${currentYear}`);
       if (response.ok) {
         const stats = await response.json();
         setPlayerStats(stats);
+      } else {
+        console.error('Failed to fetch player stats:', response.status);
       }
     } catch (error) {
       console.error('Error fetching player stats:', error);
@@ -39,7 +45,10 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year }) => {
             <div>
               <h2 className="text-xl font-bold">{player.name}</h2>
               <p className="text-blue-100">{player.position} • {player.team}</p>
-              <p className="text-blue-100">Week {week} • {year}</p>
+              <p className="text-blue-100">
+                Week {currentWeek} • {currentYear} • {seasonType || 'Unknown'}
+                {isPlayoffs && <span className="ml-2 text-yellow-300">🏆 Playoffs</span>}
+              </p>
             </div>
             <button
               onClick={onClose}
@@ -52,7 +61,11 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year }) => {
 
         {/* Content */}
         <div className="p-4">
-          {loading ? (
+          {!currentWeek || !currentYear ? (
+            <div className="text-center py-8 text-gray-600">
+              <p>Week information not available</p>
+            </div>
+          ) : loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
               <p className="mt-2 text-gray-600">Loading stats...</p>
@@ -287,7 +300,8 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year }) => {
             </div>
           ) : (
             <div className="text-center py-8 text-gray-600">
-              <p>No stats available for this player in Week {week}</p>
+              <p>No stats available for {player.name} in Week {currentWeek}</p>
+              <p className="text-sm mt-2">Stats may not have been imported yet for this week.</p>
             </div>
           )}
         </div>

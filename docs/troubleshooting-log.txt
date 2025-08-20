@@ -120,6 +120,80 @@ NEXT STEP: Find ESPN's stat type reference documentation
 NOTES: These numbers are ESPN's internal stat type identifiers
 
 ===============================================================================
+                                PROBLEM #10
+===============================================================================
+ISSUE: Need Live, Current-Week NFL Stats
+CHALLENGE: Previous endpoints only provided historical data, not current week stats
+SOLUTION: Discovered ESPN Game Summary API endpoint
+WORKING ENDPOINT: https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event={gameId}
+ADDITIONAL ENDPOINT: https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard
+NOTES: Game Summary API provides detailed player and team stats for individual games
+
+===============================================================================
+                                PROBLEM #11
+===============================================================================
+ISSUE: Complex ESPN API Data Structure
+CHALLENGE: ESPN's nested data structure difficult to navigate and map
+SOLUTION: Implemented systematic data exploration and mapping functions
+APPROACH: 
+- Added extensive console.log statements to trace data flow
+- Created mapESPNStatsToDatabase() function
+- Built processGameForDST() for team defensive stats
+- Implemented weekly update endpoint for automation
+NOTES: ESPN API structure is complex but navigable with systematic approach
+
+===============================================================================
+                                PROBLEM #12
+===============================================================================
+ISSUE: Player Stats Being Overwritten Between Categories
+SYMPTOM: Players appearing in multiple stat categories (e.g., passing + rushing) had stats reset to 0
+ROOT CAUSE: mapESPNStatsToDatabase() function reset all stats to 0 for each category
+SOLUTION: Modified weekly update logic to merge stats instead of overwriting
+IMPLEMENTATION: Find existing player stat object and merge new stats (only update fields > 0)
+NOTES: Stat merging prevents data loss when players have multiple stat categories
+
+===============================================================================
+                                PROBLEM #13
+===============================================================================
+ISSUE: Incorrect Passing Yards Mapping
+SYMPTOM: Russell Wilson showing 15 yards instead of 108 yards
+ROOT CAUSE: Passing yards incorrectly mapped from stats[2] (average) instead of stats[1] (yards)
+SOLUTION: Corrected mapESPNStatsToDatabase() to use stats[1] for passing_yards
+NOTES: ESPN stats array: [completions/attempts, yards, average, touchdowns, interceptions, sacks, rating]
+
+===============================================================================
+                                PROBLEM #14
+===============================================================================
+ISSUE: Missing Receptions Field in Database Operations
+SYMPTOM: Database errors about missing receptions field
+ROOT CAUSE: receptions field missing from INSERT and ON CONFLICT clauses
+SOLUTION: Added receptions to all database operations for consistency
+NOTES: Database schema consistency is crucial for all stat fields
+
+===============================================================================
+                                PROBLEM #15
+===============================================================================
+ISSUE: D/ST Interceptions and Fumble Recoveries Attribution
+CHALLENGE: Need to credit defensive teams for opponent's offensive mistakes
+ROOT CAUSE: ESPN provides interceptions/fumbles as offensive turnovers by the team
+SOLUTION: Implemented opponent swap logic in mapTeamDefenseStats()
+IMPLEMENTATION: Get interceptions/fumbles from opponent's team statistics
+NOTES: D/ST scoring requires understanding opponent relationships
+
+===============================================================================
+                                PROBLEM #16
+===============================================================================
+ISSUE: Need for Team-Level Defensive Statistics
+CHALLENGE: Individual player defensive stats insufficient for D/ST fantasy scoring
+SOLUTION: Created team_stats table and implemented team-level stat collection
+IMPLEMENTATION: 
+- New team_stats table with defensive stat fields
+- processGameForDST() function for team processing
+- Integration with weekly update endpoint
+- Fantasy point calculation using league rules
+NOTES: Team-level stats provide more accurate D/ST scoring
+
+===============================================================================
                                 KEY LESSONS LEARNED
 ===============================================================================
 1. Environment files can become corrupted - always recreate from scratch if variables aren't loading
@@ -139,16 +213,29 @@ NOTES: These numbers are ESPN's internal stat type identifiers
 - Player import from ESPN API
 - Basic API endpoint discovery
 - Environment variable configuration
+- ESPN Game Summary API integration
+- Live weekly stats collection
+- Complete player stat mapping
+- D/ST stats collection and processing
+- Team defensive statistics
+- Fantasy point calculations for all positions
+- Weekly automation system
+- Database schema for team_stats
 
 🔄 IN PROGRESS: 
-- Decoding ESPN stat type IDs to get actual player performance data
-- Understanding the complete data structure
+- Frontend integration of D/ST stats
+- UI updates for complete stat display
+- Final scoring engine integration
 
 🎯 NEXT STEPS: 
-- Find ESPN stat type reference documentation
-- Import playoff game data into database
-- Implement fantasy point calculations
-- Test against manual league results
+- Update frontend scoring engine to include D/ST
+- Fix player stats modal display
+- Update interface for D/ST teams
+- Clean up any scoring bugs
+- Polish UI/UX for production
+- Deploy to production environment
+
+ESTIMATED COMPLETION: 2-4 hours of frontend work remaining
 
 ===============================================================================
                                 WORKING ENDPOINTS
@@ -157,6 +244,17 @@ NOTES: These numbers are ESPN's internal stat type identifiers
 2. EVENTS: https://partners.api.espn.com/v2/sports/football/nfl/events?dates=20250101-20250215
 3. BOXSCORE: https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2024/players?view=mBoxscore
 4. LIVE SCORING: https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2024/players?view=mLiveScoring
+5. SCOREBOARD: https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard
+6. GAME SUMMARY: https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event={gameId}
+
+===============================================================================
+                                KEY BREAKTHROUGHS
+===============================================================================
+1. ESPN GAME SUMMARY API: Provides detailed player and team stats for individual games
+2. WEEKLY AUTOMATION: Automatic collection of current week stats for all 32 teams
+3. D/ST STATS: Team-level defensive statistics with correct opponent attribution
+4. COMPLETE SCORING: Fantasy points calculated for all positions using league rules
+5. REAL-TIME DATA: Live updates from ESPN for current NFL games
 
 ===============================================================================
                                 DEBUGGING COMMANDS
@@ -176,8 +274,15 @@ $response | ConvertTo-Json -Depth 10
 ===============================================================================
                                 END OF LOG
 ===============================================================================
-This troubleshooting log documents our journey from basic database setup to 
-discovering working ESPN API endpoints for fantasy football data. The key 
-takeaway is that systematic debugging and testing is essential when working 
-with external APIs, especially when dealing with complex data structures and 
-multiple endpoint options. 
+This troubleshooting log documents our complete journey from basic database setup to 
+implementing a full ESPN API integration system with live weekly stats collection, 
+D/ST processing, and complete fantasy scoring. The key takeaways are:
+
+1. Systematic debugging and testing is essential when working with external APIs
+2. ESPN API structure is complex but navigable with proper exploration
+3. Team defensive stats require understanding opponent relationships
+4. Weekly automation is crucial for fantasy sports applications
+5. Proper stat mapping prevents data loss and ensures accuracy
+
+CURRENT STATUS: 85-90% complete with 2-4 hours of frontend work remaining
+NEXT PHASE: Frontend integration and UI polish for production deployment 
