@@ -1,5 +1,6 @@
 import express from 'express';
 import { processGameForDST } from '../map-team-defense-stats.js';
+import { calculateLeagueWeeklyScores } from '../services/best-ball-scoring-service.js';
 const router = express.Router();
 
 // GET all player stats (with optional filtering)
@@ -515,9 +516,37 @@ router.post('/weekly-update', async (req, res) => {
     
     const currentWeek = scoreboardData.week?.number || 'Unknown';
     const currentYear = scoreboardData.season?.year || new Date().getFullYear();
-    const seasonType = scoreboardData.season?.type?.name || 'Unknown';
     
-    console.log(`📊 Processing Week ${currentWeek}, Year ${currentYear}, Type: ${seasonType}`);
+    // Map ESPN's numeric season type to meaningful names
+    const espnSeasonTypeId = scoreboardData.season?.type;
+    let seasonType = 'Unknown';
+    let seasonTypeName = 'Unknown';
+    
+    if (espnSeasonTypeId !== undefined) {
+      switch (espnSeasonTypeId) {
+        case 1:
+          seasonType = 'preseason';
+          seasonTypeName = 'Preseason';
+          break;
+        case 2:
+          seasonType = 'regular';
+          seasonTypeName = 'Regular Season';
+          break;
+        case 3:
+          seasonType = 'playoffs';
+          seasonTypeName = 'Playoffs';
+          break;
+        case 4:
+          seasonType = 'offseason';
+          seasonTypeName = 'Offseason';
+          break;
+        default:
+          seasonType = `unknown_${espnSeasonTypeId}`;
+          seasonTypeName = `Unknown Type ${espnSeasonTypeId}`;
+      }
+    }
+    
+    console.log(`📊 Processing Week ${currentWeek}, Year ${currentYear}, Type: ${seasonTypeName} (ESPN ID: ${espnSeasonTypeId})`);
     console.log(`🏈 Found ${scoreboardData.events.length} games this week`);
     
     // Process all games for the week
@@ -864,11 +893,55 @@ router.post('/weekly-update', async (req, res) => {
     
     console.log(`🛡️ D/ST stats inserted: ${dstInsertedCount}, updated: ${dstUpdatedCount}`);
     
+    // Calculate Best Ball weekly scores for all leagues
+    console.log(`\n🏈 Calculating Best Ball weekly scores for all leagues...`);
+    let bestBallResults = [];
+    
+    try {
+      // Get all leagues
+      const leaguesResult = await db.query('SELECT id, name FROM leagues');
+      
+      if (leaguesResult.rows.length > 0) {
+        for (const league of leaguesResult.rows) {
+          try {
+            const bestBallResult = await calculateLeagueWeeklyScores(
+              db, 
+              league.id, 
+              currentWeek, 
+              currentYear, 
+              seasonType
+            );
+            bestBallResults.push({
+              leagueId: league.id,
+              leagueName: league.name,
+              ...bestBallResult
+            });
+            console.log(`  🏈 League ${league.name}: ${bestBallResult.scoresCalculated} team scores calculated`);
+          } catch (bestBallError) {
+            console.error(`❌ Error calculating Best Ball scores for league ${league.name}:`, bestBallError.message);
+            bestBallResults.push({
+              leagueId: league.id,
+              leagueName: league.name,
+              error: bestBallError.message
+            });
+          }
+        }
+      } else {
+        console.log(`  ⚠️ No leagues found - skipping Best Ball scoring`);
+      }
+    } catch (bestBallError) {
+      console.error(`❌ Error in Best Ball scoring process:`, bestBallError.message);
+    }
+    
+    console.log(`🏈 Best Ball scoring complete for ${bestBallResults.length} leagues`);
+    
     res.json({
       message: `Weekly stats update complete for Week ${currentWeek}`,
       week: currentWeek,
       year: currentYear,
       season_type: seasonType,
+      season_type_name: seasonTypeName,
+      espn_season_type_id: espnSeasonTypeId,
       games_processed: processedGames,
       games_failed: failedGames,
       players_created: playersCreated,
@@ -878,12 +951,62 @@ router.post('/weekly-update', async (req, res) => {
       dst_stats_collected: allDSTStats.length,
       dst_inserted_count: dstInsertedCount,
       dst_updated_count: dstUpdatedCount,
+      best_ball_results: bestBallResults,
       timestamp: new Date().toISOString()
     });
     
   } catch (error) {
     console.error('❌ Weekly stats update failed:', error);
     res.status(500).json({ error: 'Failed to update weekly stats' });
+  }
+});
+
+// GET Best Ball team standings for a specific week
+router.get('/standings/:leagueId/:week', async (req, res) => {
+  try {
+    const { leagueId, week } = req.params;
+    const { year = 2025, seasonType = 'preseason' } = req.query;
+    const db = req.app.locals.db;
+    
+    const { getTeamStandings } = await import('../services/best-ball-scoring-service.js');
+    const standings = await getTeamStandings(db, parseInt(leagueId), parseInt(week), parseInt(year), seasonType);
+    
+    res.json({
+      leagueId: parseInt(leagueId),
+      week: parseInt(week),
+      year: parseInt(year),
+      seasonType,
+      standings,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting team standings:', error);
+    res.status(500).json({ error: 'Failed to get team standings' });
+  }
+});
+
+// GET season totals for all teams in a league
+router.get('/season-totals/:leagueId', async (req, res) => {
+  try {
+    const { leagueId } = req.params;
+    const { year = 2025, seasonType = 'preseason' } = req.query;
+    const db = req.app.locals.db;
+    
+    const { getSeasonTotals } = await import('../services/best-ball-scoring-service.js');
+    const seasonTotals = await getSeasonTotals(db, parseInt(leagueId), parseInt(year), seasonType);
+    
+    res.json({
+      leagueId: parseInt(leagueId),
+      year: parseInt(year),
+      seasonType,
+      seasonTotals,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting season totals:', error);
+    res.status(500).json({ error: 'Failed to get season totals' });
   }
 });
 

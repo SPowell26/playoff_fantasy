@@ -8,6 +8,13 @@ const PlayerSelectionForm = ({ leagueId, teamId, onPlayerAdded }) => {
   const [availablePlayers, setAvailablePlayers] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Helper function to format position display
+  const formatPosition = (position) => {
+    // Convert PK to K for display
+    if (position === 'PK') return 'K';
+    return position;
+  };
+
   // Fetch all players and check availability
   useEffect(() => {
     const fetchPlayers = async () => {
@@ -21,8 +28,18 @@ const PlayerSelectionForm = ({ leagueId, teamId, onPlayerAdded }) => {
         const selectedResponse = await fetch(`http://localhost:3001/api/leagues/${leagueId}/teams`);
         const teams = await selectedResponse.json();
         
-        // For now, show all players (we'll implement filtering later)
-        const available = players;
+        // Filter to only show QB, RB, WR, TE, PK (kickers), D/ST positions
+        const validPositions = ['QB', 'RB', 'WR', 'TE', 'PK', 'D/ST'];
+        const available = players.filter(player => validPositions.includes(player.position));
+        
+        // Debug logging to see what we're getting
+        console.log('All players:', players.length);
+        console.log('Valid positions:', validPositions);
+        console.log('Available players:', available.length);
+        console.log('Position breakdown:', players.reduce((acc, player) => {
+          acc[player.position] = (acc[player.position] || 0) + 1;
+          return acc;
+        }, {}));
         
         setAllPlayers(players);
         setAvailablePlayers(available);
@@ -46,11 +63,16 @@ const PlayerSelectionForm = ({ leagueId, teamId, onPlayerAdded }) => {
     if (!newSearchTerm.trim()) {
       setFilteredPlayers(availablePlayers);
     } else {
-      const filtered = availablePlayers.filter(player =>
-        player.name.toLowerCase().includes(newSearchTerm.toLowerCase()) ||
-        player.team.toLowerCase().includes(newSearchTerm.toLowerCase()) ||
-        player.position.toLowerCase().includes(newSearchTerm.toLowerCase())
-      );
+      const filtered = availablePlayers.filter(player => {
+        const searchLower = newSearchTerm.toLowerCase();
+        const nameMatch = player.name.toLowerCase().includes(searchLower);
+        const teamMatch = player.team.toLowerCase().includes(searchLower);
+        const positionMatch = player.position.toLowerCase().includes(searchLower);
+        // Also allow searching for 'K' to find 'PK' players
+        const kSearchMatch = searchLower === 'k' && player.position === 'PK';
+        
+        return nameMatch || teamMatch || positionMatch || kSearchMatch;
+      });
       setFilteredPlayers(filtered);
     }
   };
@@ -119,7 +141,7 @@ const PlayerSelectionForm = ({ leagueId, teamId, onPlayerAdded }) => {
               <div className="player-info">
                 <span className="player-name">{player.name}</span>
                 <span className="player-details">
-                  {player.position} • {player.team}
+                  {formatPosition(player.position)} • {player.team}
                 </span>
               </div>
             </div>
