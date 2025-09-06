@@ -8,6 +8,32 @@ const PlayerStatsModal = ({ player, isOpen, onClose }) => {
   // Get current week/season from context instead of props
   const { currentWeek, nflSeasonYear, seasonDisplay, seasonType, isPlayoffs } = useYearly();
 
+  // Helper function to get points allowed score and range description
+  const getPointsAllowedInfo = (pointsAllowed) => {
+    const pointsAllowedRules = [10, 7, 4, 1, 0, -1, -4, -7, -10];
+    const ranges = [
+      { range: "0 pts", score: pointsAllowedRules[0] },
+      { range: "1-6 pts", score: pointsAllowedRules[1] },
+      { range: "7-13 pts", score: pointsAllowedRules[2] },
+      { range: "14-17 pts", score: pointsAllowedRules[3] },
+      { range: "18-21 pts", score: pointsAllowedRules[4] },
+      { range: "22-27 pts", score: pointsAllowedRules[5] },
+      { range: "28-34 pts", score: pointsAllowedRules[6] },
+      { range: "35-45 pts", score: pointsAllowedRules[7] },
+      { range: "46+ pts", score: pointsAllowedRules[8] }
+    ];
+    
+    if (pointsAllowed === 0) return ranges[0];
+    else if (pointsAllowed <= 6) return ranges[1];
+    else if (pointsAllowed <= 13) return ranges[2];
+    else if (pointsAllowed <= 17) return ranges[3];
+    else if (pointsAllowed <= 21) return ranges[4];
+    else if (pointsAllowed <= 27) return ranges[5];
+    else if (pointsAllowed <= 34) return ranges[6];
+    else if (pointsAllowed <= 45) return ranges[7];
+    else return ranges[8];
+  };
+
   // Calculate total fantasy points from individual stats
   const calculateTotalPoints = (stats) => {
     if (!stats) return 0;
@@ -37,7 +63,7 @@ const PlayerStatsModal = ({ player, isOpen, onClose }) => {
     // Defense stats
     total += (stats.sacks || 0) * 1;
     total += (stats.interceptions_defense || 0) * 2;
-    total += (stats.fumble_recoveries || 0) * 1;
+    total += (stats.fumble_recoveries || 0) * 2; // Fixed: was 1, should be 2
     total += (stats.safeties || 0) * 2;
     total += (stats.blocked_kicks || 0) * 2;
     
@@ -63,7 +89,7 @@ const PlayerStatsModal = ({ player, isOpen, onClose }) => {
     
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:3001/api/stats/player/${player.id}?week=${currentWeek}&year=${nflSeasonYear}`);
+      const response = await fetch(`http://localhost:3001/api/stats/player/${player.id || player.player_id}?week=${currentWeek}&year=${nflSeasonYear}`);
       if (response.ok) {
         const stats = await response.json();
         setPlayerStats(stats);
@@ -257,8 +283,8 @@ const PlayerStatsModal = ({ player, isOpen, onClose }) => {
                       </div>
                     )}
 
-                    {/* Defensive Stats */}
-                    {(playerStats.stats[0].sacks > 0 || playerStats.stats[0].interceptions_defense > 0 || playerStats.stats[0].fumble_recoveries > 0 || playerStats.stats[0].safeties > 0 || playerStats.stats[0].blocked_kicks > 0) && (
+                    {/* Defensive Stats - Only for D/ST players */}
+                    {(player.position === 'D/ST' || player.position === 'DEF') && (playerStats.stats[0].sacks > 0 || playerStats.stats[0].interceptions_defense > 0 || playerStats.stats[0].fumble_recoveries > 0 || playerStats.stats[0].safeties > 0 || playerStats.stats[0].blocked_kicks > 0 || playerStats.stats[0].punt_return_touchdowns > 0 || playerStats.stats[0].kickoff_return_touchdowns > 0 || playerStats.stats[0].points_allowed !== undefined) && (
                       <div className="mb-4">
                         <h4 className="font-semibold text-white mb-2 border-b border-gray-600 pb-1">Defense</h4>
                         <div className="space-y-1 text-sm">
@@ -282,7 +308,7 @@ const PlayerStatsModal = ({ player, isOpen, onClose }) => {
                             <div className="flex justify-between">
                               <span className="text-gray-300">Fumble Recoveries: {playerStats.stats[0].fumble_recoveries}</span>
                               <span className="text-green-400 font-medium">
-                                {(playerStats.stats[0].fumble_recoveries * 1).toFixed(2)} pts
+                                {(playerStats.stats[0].fumble_recoveries * 2).toFixed(2)} pts
                               </span>
                             </div>
                           )}
@@ -299,6 +325,32 @@ const PlayerStatsModal = ({ player, isOpen, onClose }) => {
                               <span className="text-gray-300">Blocked Kicks: {playerStats.stats[0].blocked_kicks}</span>
                               <span className="text-green-400 font-medium">
                                 {(playerStats.stats[0].blocked_kicks * 2).toFixed(2)} pts
+                              </span>
+                            </div>
+                          )}
+                          {playerStats.stats[0].punt_return_touchdowns > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-300">Punt Return TDs: {playerStats.stats[0].punt_return_touchdowns}</span>
+                              <span className="text-green-400 font-medium">
+                                {(playerStats.stats[0].punt_return_touchdowns * 6).toFixed(2)} pts
+                              </span>
+                            </div>
+                          )}
+                          {playerStats.stats[0].kickoff_return_touchdowns > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-300">Kickoff Return TDs: {playerStats.stats[0].kickoff_return_touchdowns}</span>
+                              <span className="text-green-400 font-medium">
+                                {(playerStats.stats[0].kickoff_return_touchdowns * 6).toFixed(2)} pts
+                              </span>
+                            </div>
+                          )}
+                          {playerStats.stats[0].points_allowed !== undefined && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-300">
+                                Points Allowed: {playerStats.stats[0].points_allowed} ({getPointsAllowedInfo(playerStats.stats[0].points_allowed).range})
+                              </span>
+                              <span className={`font-medium ${getPointsAllowedInfo(playerStats.stats[0].points_allowed).score >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {getPointsAllowedInfo(playerStats.stats[0].points_allowed).score} pts
                               </span>
                             </div>
                           )}

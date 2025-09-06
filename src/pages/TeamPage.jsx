@@ -199,6 +199,18 @@ const TeamPage = () => {
         };
     }
     
+    // Add D/ST scoring rules to ensure consistent scoring
+    scoringRules = {
+        ...scoringRules,
+        sacks: 1,
+        fumbleRecoveries: 2,
+        safeties: 2,
+        blockedKicks: 2,
+        puntReturnTD: 6,
+        kickoffReturnTD: 6,
+        pointsAllowed: [10, 7, 4, 1, 0, -1, -4, -7, -10] // 0, 1-6, 7-13, 14-17, 18-21, 22-27, 28-34, 35-45, 46+
+    };
+    
     console.log('🔍 Final scoring rules:', scoringRules);
     
     // Use real stats for scoring calculations
@@ -209,6 +221,88 @@ const TeamPage = () => {
             const playerWithStats = getPlayerWithRealStats(player.player_id, currentWeek);
             if (playerWithStats) {
                 console.log('🔍 Player with stats:', playerWithStats.id, playerWithStats.name, 'Stats:', playerWithStats.stats);
+                
+                // Enhanced D/ST debug logging
+                if (playerWithStats.position === 'D/ST' || playerWithStats.position === 'DEF') {
+                    console.log('🏈 D/ST CALCULATION DEBUG:');
+                    console.log('   Player:', playerWithStats.name, 'Position:', playerWithStats.position);
+                    console.log('   Player stats:', playerWithStats.stats);
+                    console.log('   Stats keys:', Object.keys(playerWithStats.stats || {}));
+                    
+                    // D/ST scoring rules (matching backend)
+                    const dstScoringRules = {
+                        sacks: 1,
+                        interceptions: 2,
+                        fumbleRecoveries: 2,
+                        defensiveTDs: 6,
+                        safeties: 2,
+                        blockedKicks: 2,
+                        puntReturnTDs: 6,
+                        kickoffReturnTDs: 6
+                    };
+                    
+                    // Points allowed scoring (correct ranges)
+                    const getPointsAllowedScore = (pointsAllowed) => {
+                        if (pointsAllowed === 0) return 10;
+                        else if (pointsAllowed <= 6) return 7;
+                        else if (pointsAllowed <= 13) return 4;
+                        else if (pointsAllowed <= 20) return 1;
+                        else if (pointsAllowed <= 27) return 0;
+                        else if (pointsAllowed <= 34) return -1;
+                        else return -4;
+                    };
+                    
+                    // Get stat values - check both possible field names
+                    const sacks = playerWithStats.stats?.sacks || 0;
+                    const interceptions = playerWithStats.stats?.interceptions || 0;
+                    const fumbleRecoveries = playerWithStats.stats?.fumbleRecoveries || 0;
+                    const defensiveTDs = playerWithStats.stats?.defensiveTDs || 0;
+                    const safeties = playerWithStats.stats?.safeties || 0;
+                    const blockedKicks = playerWithStats.stats?.blockedKicks || 0;
+                    const puntReturnTDs = playerWithStats.stats?.puntReturnTD || 0;
+                    const kickoffReturnTDs = playerWithStats.stats?.kickoffReturnTD || 0;
+                    const pointsAllowed = playerWithStats.stats?.pointsAllowed || 0;
+                    
+                    // Debug: Show all D/ST related stats
+                    console.log('   Raw D/ST stats from API:');
+                    console.log('     sacks:', playerWithStats.stats?.sacks);
+                    console.log('     interceptions:', playerWithStats.stats?.interceptions);
+                    console.log('     fumbleRecoveries:', playerWithStats.stats?.fumbleRecoveries);
+                    console.log('     safeties:', playerWithStats.stats?.safeties);
+                    console.log('     blockedKicks:', playerWithStats.stats?.blockedKicks);
+                    console.log('     puntReturnTDs:', playerWithStats.stats?.puntReturnTD);
+                    console.log('     kickoffReturnTDs:', playerWithStats.stats?.kickoffReturnTD);
+                    console.log('     pointsAllowed:', playerWithStats.stats?.pointsAllowed);
+                    
+                    // Log individual calculations
+                    console.log(`   sacks: ${sacks} × ${dstScoringRules.sacks} = ${sacks * dstScoringRules.sacks}`);
+                    console.log(`   interceptions: ${interceptions} × ${dstScoringRules.interceptions} = ${interceptions * dstScoringRules.interceptions}`);
+                    console.log(`   fumbleRecoveries: ${fumbleRecoveries} × ${dstScoringRules.fumbleRecoveries} = ${fumbleRecoveries * dstScoringRules.fumbleRecoveries}`);
+                    console.log(`   defensiveTDs: ${defensiveTDs} × ${dstScoringRules.defensiveTDs} = ${defensiveTDs * dstScoringRules.defensiveTDs}`);
+                    console.log(`   safeties: ${safeties} × ${dstScoringRules.safeties} = ${safeties * dstScoringRules.safeties}`);
+                    console.log(`   blockedKicks: ${blockedKicks} × ${dstScoringRules.blockedKicks} = ${blockedKicks * dstScoringRules.blockedKicks}`);
+                    console.log(`   puntReturnTDs: ${puntReturnTDs} × ${dstScoringRules.puntReturnTDs} = ${puntReturnTDs * dstScoringRules.puntReturnTDs}`);
+                    console.log(`   kickoffReturnTDs: ${kickoffReturnTDs} × ${dstScoringRules.kickoffReturnTDs} = ${kickoffReturnTDs * dstScoringRules.kickoffReturnTDs}`);
+                    
+                    // Points allowed calculation
+                    const pointsAllowedScore = getPointsAllowedScore(pointsAllowed);
+                    console.log(`   pointsAllowed: ${pointsAllowed} points = ${pointsAllowedScore} points`);
+                    
+                    // Calculate total
+                    let totalPoints = 0;
+                    totalPoints += sacks * dstScoringRules.sacks;
+                    totalPoints += interceptions * dstScoringRules.interceptions;
+                    totalPoints += fumbleRecoveries * dstScoringRules.fumbleRecoveries;
+                    totalPoints += defensiveTDs * dstScoringRules.defensiveTDs;
+                    totalPoints += safeties * dstScoringRules.safeties;
+                    totalPoints += blockedKicks * dstScoringRules.blockedKicks;
+                    totalPoints += puntReturnTDs * dstScoringRules.puntReturnTDs;
+                    totalPoints += kickoffReturnTDs * dstScoringRules.kickoffReturnTDs;
+                    totalPoints += pointsAllowedScore;
+                    
+                    console.log(`   Total D/ST Points: ${totalPoints.toFixed(2)}`);
+                }
+                
                 return {
                     ...player,
                     ...playerWithStats

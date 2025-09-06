@@ -19,30 +19,45 @@ function mapTeamDefenseStats(teamStats, opponentScore, isWinner, opponentStats) 
     kickoff_return_touchdowns: 0,
     
     // Calculated stats
-    points_allowed: 0,
-    team_win: false,
+    points_allowed: opponentScore || 0, // Set points allowed to opponent's score
+    team_win: isWinner || false,
     
     // Fantasy points (will be calculated)
     fantasy_points: 0
   };
   
-  // Map ESPN team stats to our format
+  // Map ESPN team stats to our format using the correct stat names we discovered
   for (const stat of teamStats) {
     switch (stat.name) {
       case 'sacksYardsLost':
-        // Format: "2-15" (sacks-yards)
+        // Format: "2-15" (sacks-yards) - this is sacks allowed by this team
         if (stat.displayValue && stat.displayValue.includes('-')) {
           const sacks = parseInt(stat.displayValue.split('-')[0]) || 0;
-          dstStats.sacks = sacks;
-          console.log(`  🎯 Sacks: ${sacks} from "${stat.displayValue}"`);
+          // Don't count sacks allowed as sacks for D/ST - we need sacks made
+          console.log(`  🔍 Sacks allowed by this team: ${sacks} (not counted for D/ST)`);
         }
         break;
         
-      case 'defensiveTouchdowns':
+      case 'defensiveSpecialTeamsTds':
         // This is defensive/special teams TDs scored BY the team
         const defTDs = parseInt(stat.displayValue) || 0;
         dstStats.defensive_touchdowns = defTDs;
-        console.log(`  🎯 Defensive TDs: ${defTDs}`);
+        console.log(`  🎯 Defensive/Special Teams TDs: ${defTDs}`);
+        break;
+        
+      case 'turnovers':
+        // This is turnovers by this team (not what we want for D/ST)
+        console.log(`  🔍 Turnovers by this team: ${stat.displayValue} (not counted for D/ST)`);
+        break;
+        
+      case 'fumblesLost':
+        // This is fumbles lost by this team (not what we want for D/ST)
+        console.log(`  🔍 Fumbles lost by this team: ${stat.displayValue} (not counted for D/ST)`);
+        break;
+        
+      case 'interceptions':
+        // This is interceptions thrown by this team (not what we want for D/ST)
+        console.log(`  🔍 Interceptions thrown by this team: ${stat.displayValue} (not counted for D/ST)`);
         break;
         
       default:
@@ -58,8 +73,9 @@ function mapTeamDefenseStats(teamStats, opponentScore, isWinner, opponentStats) 
     }
   }
   
-  // NOW GET INTERCEPTIONS AND FUMBLES FROM OPPONENT (the swap!)
+  // NOW GET INTERCEPTIONS, FUMBLES, AND SACKS FROM OPPONENT (the swap!)
   if (opponentStats) {
+    console.log(`  🔍 Available opponent stats:`, opponentStats.map(s => s.name));
     for (const stat of opponentStats) {
       switch (stat.name) {
         case 'interceptions':
@@ -75,18 +91,176 @@ function mapTeamDefenseStats(teamStats, opponentScore, isWinner, opponentStats) 
           dstStats.fumble_recoveries = opponentFumbles;
           console.log(`  🎯 Fumble Recoveries (from opponent): ${opponentFumbles}`);
           break;
+          
+        case 'sacksYardsLost':
+          // This is sacks allowed BY the opponent (credit goes to this team's D/ST)
+          console.log(`  🔍 Opponent sacksYardsLost raw value: "${stat.displayValue}"`);
+          if (stat.displayValue && stat.displayValue.includes('-')) {
+            const parts = stat.displayValue.split('-');
+            const sacks = parseInt(parts[0]) || 0;
+            const yards = parseInt(parts[1]) || 0;
+            dstStats.sacks = sacks;
+            console.log(`  🎯 Sacks (from opponent): ${sacks}, Yards: ${yards}`);
+          }
+          break;
       }
     }
   }
   
-  // Set points allowed (opponent's score)
-  dstStats.points_allowed = opponentScore || 0;
-  
-  // Set team win/loss
-  dstStats.team_win = isWinner || false;
-  
-  console.log(`  ✅ Mapped D/ST stats:`, dstStats);
   return dstStats;
+}
+
+/**
+ * Extract individual defensive stats for a specific team only
+ */
+function extractIndividualDefenseStatsForTeam(gameSummaryData, teamAbbr) {
+  const stats = {
+    sacks: 0,
+    interceptions_defense: 0,
+    fumble_recoveries: 0,
+    safeties: 0,
+    blocked_kicks: 0,
+    punt_return_touchdowns: 0,
+    kickoff_return_touchdowns: 0
+  };
+  
+  // Look through players for the specific team only
+  if (gameSummaryData.boxscore?.players) {
+    console.log(`  🔍 Looking for team ${teamAbbr} in player data...`);
+    gameSummaryData.boxscore.players.forEach((team, teamIndex) => {
+      console.log(`  🔍 Team ${teamIndex}: ${team.team?.abbreviation}`);
+      
+      // Only process the team we're interested in
+      if (team.team?.abbreviation !== teamAbbr) {
+        console.log(`  ⏭️ Skipping team ${team.team?.abbreviation} (not ${teamAbbr})`);
+        return;
+      }
+      
+      console.log(`  ✅ Found team ${teamAbbr}, processing stats...`);
+      
+      if (!team.statistics) {
+        console.log(`  ❌ No statistics for team ${teamAbbr}`);
+        return;
+      }
+      
+      team.statistics.forEach(statCategory => {
+        if (!statCategory.athletes) return;
+        
+        console.log(`  🔍 Processing stat category: ${statCategory.name} (${statCategory.athletes.length} athletes)`);
+        
+        statCategory.athletes.forEach((athlete, athleteIndex) => {
+          if (!athlete.stats) return;
+          
+          // Sum up individual defensive stats for this team only
+          if (statCategory.name === 'defensive') {
+            const athleteSacks = parseInt(athlete.stats[1]) || 0;
+            const athleteInts = parseInt(athlete.stats[2]) || 0;
+            const athleteFumRec = parseInt(athlete.stats[3]) || 0;
+            
+            console.log(`    🏈 Athlete ${athleteIndex}: Sacks=${athleteSacks}, INTs=${athleteInts}, FumRec=${athleteFumRec}`);
+            
+            stats.sacks += athleteSacks;
+            stats.interceptions_defense += athleteInts;
+            stats.fumble_recoveries += athleteFumRec;
+          }
+          
+          // Special teams return TDs - separate categories
+          if (statCategory.name === 'puntReturns') {
+            // ESPN punt return format: [returns, yards, avg, long, td]
+            if (athlete.stats && athlete.stats.length >= 5) {
+              const puntReturnTDs = parseInt(athlete.stats[4]) || 0;
+              stats.punt_return_touchdowns += puntReturnTDs;
+              if (puntReturnTDs > 0) {
+                console.log(`    🏈 Punt Return TD: ${puntReturnTDs}`);
+              }
+            }
+          }
+          
+          if (statCategory.name === 'kickReturns') {
+            // ESPN kick return format: [returns, yards, avg, long, td]
+            if (athlete.stats && athlete.stats.length >= 5) {
+              const kickoffReturnTDs = parseInt(athlete.stats[4]) || 0;
+              stats.kickoff_return_touchdowns += kickoffReturnTDs;
+              if (kickoffReturnTDs > 0) {
+                console.log(`    🏈 Kickoff Return TD: ${kickoffReturnTDs}`);
+              }
+            }
+          }
+        });
+      });
+    });
+  }
+  
+  console.log(`  🎯 ${teamAbbr} individual defensive stats:`, stats);
+  return stats;
+}
+
+/**
+ * Extract individual defensive stats from all players in a game
+ * This supplements the team-level stats with individual player defensive stats
+ */
+function extractIndividualDefenseStats(gameSummaryData) {
+  const stats = {
+    sacks: 0,
+    interceptions_defense: 0,
+    fumble_recoveries: 0,
+    safeties: 0,
+    blocked_kicks: 0,
+    punt_return_touchdowns: 0,
+    kickoff_return_touchdowns: 0
+  };
+  
+  // Look through all players for defensive stats
+  if (gameSummaryData.boxscore?.players) {
+    gameSummaryData.boxscore.players.forEach(team => {
+      if (!team.statistics) return;
+      
+      team.statistics.forEach(statCategory => {
+        if (!statCategory.athletes) return;
+        
+        statCategory.athletes.forEach(athlete => {
+          if (!athlete.stats) return;
+          
+          // Sum up individual defensive stats
+          if (statCategory.name === 'defensive') {
+            // ESPN defensive format: [tackles, sacks, interceptions, fumble_recoveries, passes_defended, touchdowns]
+            stats.sacks += parseInt(athlete.stats[1]) || 0; // stats[1] = sacks
+            stats.interceptions_defense += parseInt(athlete.stats[2]) || 0; // stats[2] = interceptions
+            stats.fumble_recoveries += parseInt(athlete.stats[3]) || 0; // stats[3] = fumble_recoveries
+            // Note: Safeties are not available in this defensive stats array
+            // They would need to be extracted from special teams stats or individual player stats
+            // stats.blocked_kicks += parseInt(athlete.stats[4]) || 0; // stats[4] = passes_defended, not blocked kicks
+          }
+          
+          // Special teams return TDs - separate categories
+          if (statCategory.name === 'puntReturns') {
+            // ESPN punt return format: [returns, yards, avg, long, td]
+            if (athlete.stats && athlete.stats.length >= 5) {
+              const puntReturnTDs = parseInt(athlete.stats[4]) || 0;
+              stats.punt_return_touchdowns += puntReturnTDs;
+              if (puntReturnTDs > 0) {
+                console.log(`    🏈 Punt Return TD: ${puntReturnTDs}`);
+              }
+            }
+          }
+          
+          if (statCategory.name === 'kickReturns') {
+            // ESPN kick return format: [returns, yards, avg, long, td]
+            if (athlete.stats && athlete.stats.length >= 5) {
+              const kickoffReturnTDs = parseInt(athlete.stats[4]) || 0;
+              stats.kickoff_return_touchdowns += kickoffReturnTDs;
+              if (kickoffReturnTDs > 0) {
+                console.log(`    🏈 Kickoff Return TD: ${kickoffReturnTDs}`);
+              }
+            }
+          }
+        });
+      });
+    });
+  }
+  
+  console.log(`  🎯 Individual defensive stats:`, stats);
+  return stats;
 }
 
 /**
@@ -150,7 +324,7 @@ function calculateDSTFantasyPoints(dstStats, scoringRules = null) {
 /**
  * Process a complete game to extract D/ST stats for both teams
  */
-function processGameForDST(gameSummaryData) {
+function processGameForDST(gameSummaryData, currentWeek = 1, currentYear = 2025) {
   console.log(`🏈 Processing game for D/ST stats...`);
   
   const dstResults = [];
@@ -158,6 +332,22 @@ function processGameForDST(gameSummaryData) {
   if (!gameSummaryData.boxscore?.teams || !gameSummaryData.header?.competitions) {
     console.log('❌ Missing required data structures');
     return dstResults;
+  }
+  
+  // Debug: Log the structure of team stats
+  console.log(`🔍 Game summary structure:`);
+  console.log(`  - boxscore.teams exists:`, !!gameSummaryData.boxscore?.teams);
+  console.log(`  - Number of teams:`, gameSummaryData.boxscore?.teams?.length);
+  
+  if (gameSummaryData.boxscore?.teams) {
+    gameSummaryData.boxscore.teams.forEach((team, index) => {
+      console.log(`  - Team ${index}: ${team.team?.abbreviation}`);
+      console.log(`    - Statistics available:`, !!team.statistics);
+      console.log(`    - Number of stat categories:`, team.statistics?.length);
+      if (team.statistics) {
+        console.log(`    - Stat categories:`, team.statistics.map(s => s.name));
+      }
+    });
   }
   
   // Get team scores and winners from competition data
@@ -174,10 +364,22 @@ function processGameForDST(gameSummaryData) {
   console.log(`📊 Team scores:`, teamScores);
   console.log(`🏆 Team winners:`, teamWinners);
   
+  // Extract individual defensive stats from all players (this sums ALL teams)
+  const individualDefenseStats = extractIndividualDefenseStats(gameSummaryData);
+  console.log(`🛡️ Total individual defensive stats (ALL teams):`, individualDefenseStats);
+  
   // Create a map of team stats for easy lookup
   const teamStatsMap = {};
   for (const team of gameSummaryData.boxscore.teams) {
     teamStatsMap[team.team.abbreviation] = team.statistics;
+    
+    // Debug: Log all available stats for this team
+    console.log(`\n🔍 ${team.team.abbreviation} team stats:`);
+    if (team.statistics) {
+      team.statistics.forEach(stat => {
+        console.log(`  - ${stat.name}: ${stat.displayValue}`);
+      });
+    }
   }
   
   // Process each team's defensive stats
@@ -193,18 +395,26 @@ function processGameForDST(gameSummaryData) {
     console.log(`\n🏈 Processing ${teamAbbr} D/ST stats (opponent: ${opponentAbbr}):`);
     
     // Map the team's defensive stats, but get interceptions/fumbles from OPPONENT
-    const dstStats = mapTeamDefenseStats(team.statistics, opponentScore, isWinner, opponentStats);
+    const teamDstStats = mapTeamDefenseStats(team.statistics, opponentScore, isWinner, opponentStats);
+    
+    // For D/ST, we only use team-level stats (no individual player stats needed)
+    // Team-level stats are available and contain all the data we need
+    const combinedDstStats = {
+      ...teamDstStats
+      // Note: All D/ST stats come from team-level data, not individual players
+      // This avoids double-counting and uses the correct team totals
+    };
     
     // Calculate fantasy points
-    const fantasyPoints = calculateDSTFantasyPoints(dstStats);
-    dstStats.fantasy_points = fantasyPoints;
+    const fantasyPoints = calculateDSTFantasyPoints(combinedDstStats);
+    combinedDstStats.fantasy_points = fantasyPoints;
     
     // Add team info
     const dstResult = {
       team: teamAbbr,
-      week: gameSummaryData.header.week?.number,
-      year: gameSummaryData.header.season?.year,
-      ...dstStats
+      week: currentWeek,
+      year: currentYear,
+      ...combinedDstStats
     };
     
     dstResults.push(dstResult);
@@ -218,7 +428,8 @@ function processGameForDST(gameSummaryData) {
 export {
   mapTeamDefenseStats,
   calculateDSTFantasyPoints,
-  processGameForDST
+  processGameForDST,
+  extractIndividualDefenseStats
 };
 
 console.log('🏈 Team Defense Stats mapping functions loaded!');

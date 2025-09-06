@@ -1,0 +1,119 @@
+{
+  "description": "ESPN Game Summary API Structure - Dallas vs Philadelphia Example",
+  "api_endpoint": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event={gameId}",
+  "structure": {
+    "top_level_keys": [
+      "boxscore", "format", "gameInfo", "drives", "leaders", "injuries", 
+      "broadcasts", "pickcenter", "againstTheSpread", "odds", "header", 
+      "scoringPlays", "news", "winprobability", "article", "videos", 
+      "wallclockAvailable", "meta", "standings"
+    ],
+    "boxscore": {
+      "keys": ["teams", "players"],
+      "teams": {
+        "description": "Team-level statistics (25 categories per team)",
+        "structure": {
+          "keys": ["team", "statistics", "displayOrder", "homeAway"],
+          "team": {
+            "abbreviation": "DAL/PHI/etc"
+          },
+          "statistics": [
+            "firstDowns", "firstDownsPassing", "firstDownsRushing", "firstDownsPenalty",
+            "thirdDownEff", "fourthDownEff", "totalOffensivePlays", "totalYards", 
+            "yardsPerPlay", "totalDrives", "netPassingYards", "completionAttempts",
+            "yardsPerPass", "interceptions", "sacksYardsLost", "rushingYards", 
+            "rushingAttempts", "yardsPerRushAttempt", "redZoneAttempts", 
+            "totalPenaltiesYards", "turnovers", "fumblesLost", "interceptions", 
+            "defensiveTouchdowns", "possessionTime"
+          ]
+        },
+        "key_stats_for_dst": {
+          "sacksYardsLost": "Format: '1-8' = 1 sack allowed, 8 yards lost (opponent's sacks made)",
+          "interceptions": "Interceptions thrown by this team (opponent's interceptions made)",
+          "fumblesLost": "Fumbles lost by this team (opponent's fumble recoveries made)",
+          "defensiveTouchdowns": "Defensive/special teams TDs scored by this team"
+        }
+      },
+      "players": {
+        "description": "Individual player statistics grouped by team",
+        "structure": {
+          "keys": ["team", "statistics", "displayOrder"],
+          "team": {
+            "abbreviation": "DAL/PHI/etc"
+          },
+          "statistics": [
+            "passing", "rushing", "receiving", "fumbles", "defensive", 
+            "interceptions", "kickReturns", "puntReturns", "kicking", "punting"
+          ],
+          "defensive_stats_format": {
+            "array_indices": "[tackles, sacks, interceptions, fumble_recoveries, passes_defended, touchdowns, ?]",
+            "example": "[9, 6, 0, 1, 1, 0, 0]",
+            "mapping": {
+              "0": "tackles",
+              "1": "sacks", 
+              "2": "interceptions",
+              "3": "fumble_recoveries",
+              "4": "passes_defended",
+              "5": "touchdowns",
+              "6": "unknown"
+            }
+          }
+        }
+      }
+    },
+    "header": {
+      "keys": ["id", "uid", "season", "timeValid", "competitions"],
+      "competitions": [
+        {
+          "keys": ["id", "uid", "date", "attendance", "type", "timeValid", "neutralSite", "conferenceCompetition", "recent", "venue", "competitors", "notes", "status", "broadcasts", "weather", "leaders"],
+          "competitors": [
+            {
+              "team": {"abbreviation": "DAL/PHI"},
+              "score": "20/24",
+              "winner": true/false
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "dst_stat_mapping": {
+    "description": "How to map ESPN data to D/ST fantasy stats",
+    "sacks": "Get from opponent's sacksYardsLost stat (sacks allowed by them = sacks made by us)",
+    "interceptions": "Get from opponent's interceptions stat (interceptions thrown by them = interceptions made by us)", 
+    "fumble_recoveries": "Get from opponent's fumblesLost stat (fumbles lost by them = fumble recoveries by us)",
+    "defensive_touchdowns": "Get from our own defensiveTouchdowns stat",
+    "points_allowed": "Get from opponent's score in header.competitions[0].competitors",
+    "team_win": "Get from our own winner status in header.competitions[0].competitors"
+  },
+  "example_data": {
+    "dallas_team_stats": {
+      "sacksYardsLost": "0-0",
+      "interceptions": "0", 
+      "fumblesLost": "1",
+      "defensiveTouchdowns": "0"
+    },
+    "philadelphia_team_stats": {
+      "sacksYardsLost": "1-8",
+      "interceptions": "0",
+      "fumblesLost": "0", 
+      "defensiveTouchdowns": "0"
+    },
+    "dallas_dst_should_get": {
+      "sacks": 1,
+      "interceptions": 0,
+      "fumble_recoveries": 0,
+      "defensive_touchdowns": 0,
+      "points_allowed": 24,
+      "team_win": false
+    },
+    "philadelphia_dst_should_get": {
+      "sacks": 0,
+      "interceptions": 0, 
+      "fumble_recoveries": 1,
+      "defensive_touchdowns": 0,
+      "points_allowed": 20,
+      "team_win": true
+    }
+  }
+}

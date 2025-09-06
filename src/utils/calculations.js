@@ -80,7 +80,7 @@ export const calculatePlayerScore = (player, scoringRules) => {
   if (position === 'D/ST' || position === 'DEF') {
     totalScore += (stats.sacks || 0) * (scoringRules.sacks || 1);
     totalScore += (stats.interceptions || 0) * (scoringRules.interceptions || 2);
-    totalScore += (stats.fumbleRecoveries || 0) * (scoringRules.fumbleRecoveries || 1);
+    totalScore += (stats.fumbleRecoveries || 0) * (scoringRules.fumbleRecoveries || 2);
     totalScore += (stats.safeties || 0) * (scoringRules.safeties || 2);
     totalScore += (stats.blockedKicks || 0) * (scoringRules.blockedKicks || 2);
     totalScore += (stats.puntReturnTD || 0) * (scoringRules.puntReturnTD || 6);
@@ -184,28 +184,30 @@ export const calculatePlayerWeeklyScore = (player, scoringRules, week) => {
   score += (weeklyStats.extraPointsMade || 0) * scoringRules.extraPointsMade;
   score += (weeklyStats.fieldGoalsMissed || 0) * scoringRules.fieldGoalsMissed;
   
-  // Defense stats
-  score += (weeklyStats.sacks || 0) * scoringRules.sacks;
-  score += (weeklyStats.interceptions || 0) * scoringRules.interceptions;
-  score += (weeklyStats.fumbleRecoveries || 0) * scoringRules.fumbleRecoveries;
-  score += (weeklyStats.safeties || 0) * scoringRules.safeties;
-  
-  // Defense points allowed scoring
-  if (weeklyStats.pointsAllowed !== undefined && scoringRules.pointsAllowed) {
-    const pointsAllowed = weeklyStats.pointsAllowed;
-    let pointsAllowedScore = 0;
+  // Defense stats (only for D/ST)
+  if (player.position === 'D/ST' || player.position === 'DEF') {
+    score += (weeklyStats.sacks || 0) * scoringRules.sacks;
+    score += (weeklyStats.interceptions || 0) * scoringRules.interceptions;
+    score += (weeklyStats.fumbleRecoveries || 0) * scoringRules.fumbleRecoveries;
+    score += (weeklyStats.safeties || 0) * scoringRules.safeties;
     
-    if (pointsAllowed === 0) pointsAllowedScore = scoringRules.pointsAllowed[0];
-    else if (pointsAllowed <= 6) pointsAllowedScore = scoringRules.pointsAllowed[1];
-    else if (pointsAllowed <= 13) pointsAllowedScore = scoringRules.pointsAllowed[2];
-    else if (pointsAllowed <= 17) pointsAllowedScore = scoringRules.pointsAllowed[3];
-    else if (pointsAllowed <= 21) pointsAllowedScore = scoringRules.pointsAllowed[4];
-    else if (pointsAllowed <= 27) pointsAllowedScore = scoringRules.pointsAllowed[5];
-    else if (pointsAllowed <= 34) pointsAllowedScore = scoringRules.pointsAllowed[6];
-    else if (pointsAllowed <= 45) pointsAllowedScore = scoringRules.pointsAllowed[7];
-    else pointsAllowedScore = scoringRules.pointsAllowed[8];
-    
-    score += pointsAllowedScore;
+    // Defense points allowed scoring (only for D/ST)
+    if (weeklyStats.pointsAllowed !== undefined && scoringRules.pointsAllowed) {
+      const pointsAllowed = weeklyStats.pointsAllowed;
+      let pointsAllowedScore = 0;
+      
+      if (pointsAllowed === 0) pointsAllowedScore = scoringRules.pointsAllowed[0];
+      else if (pointsAllowed <= 6) pointsAllowedScore = scoringRules.pointsAllowed[1];
+      else if (pointsAllowed <= 13) pointsAllowedScore = scoringRules.pointsAllowed[2];
+      else if (pointsAllowed <= 17) pointsAllowedScore = scoringRules.pointsAllowed[3];
+      else if (pointsAllowed <= 21) pointsAllowedScore = scoringRules.pointsAllowed[4];
+      else if (pointsAllowed <= 27) pointsAllowedScore = scoringRules.pointsAllowed[5];
+      else if (pointsAllowed <= 34) pointsAllowedScore = scoringRules.pointsAllowed[6];
+      else if (pointsAllowed <= 45) pointsAllowedScore = scoringRules.pointsAllowed[7];
+      else pointsAllowedScore = scoringRules.pointsAllowed[8];
+      
+      score += pointsAllowedScore;
+    }
   }
   
   return score;

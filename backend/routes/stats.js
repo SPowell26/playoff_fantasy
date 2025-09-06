@@ -551,6 +551,7 @@ router.post('/weekly-update', async (req, res) => {
     
     // Process all games for the week
     const allPlayerStats = [];
+    const allDstStats = [];
     const playersToCreate = new Map(); // Track players we need to create
     let processedGames = 0;
     let failedGames = 0;
@@ -737,7 +738,7 @@ router.post('/weekly-update', async (req, res) => {
     
     console.log(`✅ Created ${playersCreated} new players`);
     
-    // Process D/ST stats for all games
+    // Process D/ST stats for all games using team-level data
     console.log(`\n🛡️ Processing D/ST stats for all games...`);
     const allDSTStats = [];
     
@@ -759,8 +760,8 @@ router.post('/weekly-update', async (req, res) => {
           continue;
         }
         
-        // Process D/ST stats for this game
-        const dstResults = processGameForDST(gameSummaryData);
+        // Process D/ST stats for this game using team-level data
+        const dstResults = processGameForDST(gameSummaryData, currentWeek, currentYear);
         
         // Add week/year info if missing
         for (const dstStat of dstResults) {
@@ -842,39 +843,49 @@ router.post('/weekly-update', async (req, res) => {
       }
     }
     
-    // Insert D/ST stats into database
+    // Insert D/ST stats into database as player_stats
     let dstInsertedCount = 0;
     let dstUpdatedCount = 0;
     
     for (const dstStat of allDSTStats) {
       try {
+        // Get the D/ST player ID for this team
+        const dstPlayerResult = await db.query(
+          'SELECT id FROM players WHERE position = \'D/ST\' AND team = $1',
+          [dstStat.team]
+        );
+        
+        if (dstPlayerResult.rows.length === 0) {
+          console.log(`❌ No D/ST player found for team ${dstStat.team}`);
+          continue;
+        }
+        
+        const dstPlayerId = dstPlayerResult.rows[0].id;
+        
         const result = await db.query(
-          `INSERT INTO team_stats (
-            team, week, year, season_type, sacks, interceptions, fumble_recoveries,
-            safeties, blocked_kicks, defensive_touchdowns, punt_return_touchdowns,
-            kickoff_return_touchdowns, points_allowed, team_win, fantasy_points, source
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-          ON CONFLICT (team, week, year, season_type) DO UPDATE SET
+          `INSERT INTO player_stats (
+            player_id, week, year, season_type, sacks, interceptions_defense, fumble_recoveries,
+            safeties, blocked_kicks, punt_return_touchdowns, kickoff_return_touchdowns,
+            points_allowed, team_win, source
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          ON CONFLICT (player_id, week, year) DO UPDATE SET
             sacks = EXCLUDED.sacks,
-            interceptions = EXCLUDED.interceptions,
+            interceptions_defense = EXCLUDED.interceptions_defense,
             fumble_recoveries = EXCLUDED.fumble_recoveries,
             safeties = EXCLUDED.safeties,
             blocked_kicks = EXCLUDED.blocked_kicks,
-            defensive_touchdowns = EXCLUDED.defensive_touchdowns,
             punt_return_touchdowns = EXCLUDED.punt_return_touchdowns,
             kickoff_return_touchdowns = EXCLUDED.kickoff_return_touchdowns,
             points_allowed = EXCLUDED.points_allowed,
             team_win = EXCLUDED.team_win,
-            fantasy_points = EXCLUDED.fantasy_points,
             source = EXCLUDED.source,
             updated_at = CURRENT_TIMESTAMP
           RETURNING (xmax = 0)`,
           [
-            dstStat.team, dstStat.week, dstStat.year, dstStat.season_type,
-            dstStat.sacks, dstStat.interceptions, dstStat.fumble_recoveries,
-            dstStat.safeties, dstStat.blocked_kicks, dstStat.defensive_touchdowns,
-            dstStat.punt_return_touchdowns, dstStat.kickoff_return_touchdowns,
-            dstStat.points_allowed, dstStat.team_win, dstStat.fantasy_points,
+            dstPlayerId, dstStat.week, dstStat.year, dstStat.season_type,
+            dstStat.sacks, dstStat.interceptions_defense, dstStat.fumble_recoveries,
+            dstStat.safeties, dstStat.blocked_kicks, dstStat.punt_return_touchdowns,
+            dstStat.kickoff_return_touchdowns, dstStat.points_allowed, dstStat.team_win,
             dstStat.source
           ]
         );
@@ -885,6 +896,8 @@ router.post('/weekly-update', async (req, res) => {
         } else {
           dstUpdatedCount++;
         }
+        
+        console.log(`✅ D/ST stats for ${dstStat.team} (player ${dstPlayerId}): ${dstStat.sacks} sacks, ${dstStat.interceptions_defense} INTs, ${dstStat.fumble_recoveries} FRs`);
         
       } catch (dstInsertError) {
         console.error(`Failed to insert D/ST stat for team ${dstStat.team} week ${dstStat.week}:`, dstInsertError);
