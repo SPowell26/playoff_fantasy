@@ -16,6 +16,8 @@ const TeamPage = () => {
     const [editStats, setEditStats] = useState({});
     const [showPlayerSelection, setShowPlayerSelection] = useState(false);
     const [currentWeek, setCurrentWeek] = useState(1);
+    const [currentYear, setCurrentYear] = useState(2024);
+    const [availableWeeks, setAvailableWeeks] = useState([]);
     const [selectedPlayerForStats, setSelectedPlayerForStats] = useState(null);
     const [showPlayerStatsModal, setShowPlayerStatsModal] = useState(false);
     const { fetchRealStats, getPlayerWithRealStats } = useData();
@@ -31,6 +33,44 @@ const TeamPage = () => {
             fetchTeamRoster();
         }
     }, [team?.id]); // Only depend on team ID, not the entire team object
+
+    // Fetch available weeks when component mounts
+    useEffect(() => {
+        fetchAvailableWeeks();
+    }, []);
+
+    // Fetch stats when component mounts with initial week/year
+    useEffect(() => {
+        if (currentWeek && currentYear) {
+            fetchRealStats(currentWeek, currentYear);
+        }
+    }, []); // Only run once on mount
+
+    // Fetch stats when week or year changes
+    useEffect(() => {
+        if (currentWeek && currentYear) {
+            fetchRealStats(currentWeek, currentYear);
+        }
+    }, [currentWeek, currentYear]);
+
+    const fetchAvailableWeeks = async () => {
+        try {
+            const response = await fetch('http://localhost:3001/api/stats/available-weeks');
+            if (response.ok) {
+                const data = await response.json();
+                setAvailableWeeks(data.weeks || []);
+                
+                // Set default week and year to the first available
+                if (data.weeks && data.weeks.length > 0) {
+                    const firstWeek = data.weeks[0];
+                    setCurrentWeek(firstWeek.week);
+                    setCurrentYear(firstWeek.year);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch available weeks:', error);
+        }
+    };
 
     const fetchTeamData = async () => {
         try {
@@ -139,16 +179,47 @@ const TeamPage = () => {
         return position;
     };
 
-    const scoringRules = league.scoring_rules || {};
+    // Extract offensive scoring rules from nested structure
+    let scoringRules = league.scoring_rules || {};
+    if (scoringRules.offensive) {
+        scoringRules = scoringRules.offensive;
+    }
+    
+    // Fallback to default rules if not found
+    if (!scoringRules.passingYards) {
+        scoringRules = {
+            passingYards: 0.04,
+            passingTD: 4,
+            interceptions: -2,
+            rushingYards: 0.1,
+            rushingTD: 6,
+            receivingYards: 0.1,
+            receivingTD: 6,
+            fumbles: -2
+        };
+    }
+    
+    console.log('🔍 Final scoring rules:', scoringRules);
     
     // Use real stats for scoring calculations
     const teamWithRealStats = {
         ...team,
         players: (team.players || []).map(player => {
             console.log('🔍 Processing player:', player.player_id, player.name, 'from team roster');
-            const playerWithStats = getPlayerWithRealStats(player.player_id, currentWeek) || player;
-            console.log('🔍 Player with stats:', playerWithStats.player_id || playerWithStats.id, playerWithStats.name);
-            return playerWithStats;
+            const playerWithStats = getPlayerWithRealStats(player.player_id, currentWeek);
+            if (playerWithStats) {
+                console.log('🔍 Player with stats:', playerWithStats.id, playerWithStats.name, 'Stats:', playerWithStats.stats);
+                return {
+                    ...player,
+                    ...playerWithStats
+                };
+            } else {
+                console.log('🔍 No stats found for player, using original player data with empty stats:', player.player_id, player.name);
+                return {
+                    ...player,
+                    stats: {} // Ensure every player has a stats property
+                };
+            }
         })
     };
     
@@ -233,7 +304,7 @@ const TeamPage = () => {
                     <div className="text-sm font-medium text-white">
                         {calculatePlayerScore(player, scoringRules).toFixed(2)} pts
                     </div>
-                    <div className="text-xs text-gray-400">Week {currentWeek}</div>
+                    <div className="text-xs text-gray-400">Week {currentWeek} ({currentYear})</div>
                 </div>
             </div>
         </div>
@@ -279,7 +350,7 @@ const TeamPage = () => {
                         </div>
                         <div className="mt-4 sm:mt-0">
                             <button
-                                onClick={() => fetchRealStats(currentWeek, 2024)}
+                                onClick={() => fetchRealStats(currentWeek, currentYear)}
                                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-300 bg-blue-900/20 hover:bg-blue-900/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors border border-blue-700/50"
                             >
                                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -292,22 +363,38 @@ const TeamPage = () => {
 
                     <div className="flex flex-wrap items-center space-x-4">
                         <div className="flex items-center space-x-2">
-                            <label className="text-sm font-medium text-gray-300">Week:</label>
-                        <select 
-                            value={currentWeek} 
-                            onChange={(e) => setCurrentWeek(parseInt(e.target.value))}
+                            <label className="text-sm font-medium text-gray-300">Year:</label>
+                            <select 
+                                value={currentYear} 
+                                onChange={(e) => setCurrentYear(parseInt(e.target.value))}
                                 className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-white"
-                        >
-                            <option value={1}>1 - Wild Card</option>
-                            <option value={2}>2 - Divisional</option>
-                            <option value={3}>3 - Conference Championship</option>
-                            <option value={4}>4 - Super Bowl</option>
-                        </select>
+                            >
+                                {Array.from(new Set(availableWeeks.map(w => w.year))).sort((a, b) => b - a).map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <label className="text-sm font-medium text-gray-300">Week:</label>
+                            <select 
+                                value={currentWeek} 
+                                onChange={(e) => setCurrentWeek(parseInt(e.target.value))}
+                                className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-white"
+                            >
+                                {availableWeeks
+                                    .filter(w => w.year === currentYear)
+                                    .sort((a, b) => a.week - b.week)
+                                    .map(week => (
+                                        <option key={`${week.year}-${week.week}`} value={week.week}>
+                                            Week {week.week}
+                                        </option>
+                                    ))}
+                            </select>
                         </div>
                         <div className="text-sm text-gray-400">
-                            Season: 2024
+                            Available: {availableWeeks.filter(w => w.year === currentYear).length} weeks
                         </div>
-                </div>
+                    </div>
                 </div>
             </div>
             
@@ -491,7 +578,7 @@ const TeamPage = () => {
                     {/* Team Total Score */}
                     <div className="bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6">
                         <div className="text-center">
-                            <h3 className="text-lg font-medium text-white mb-2">Week {currentWeek} Score</h3>
+                            <h3 className="text-lg font-medium text-white mb-2">Week {currentWeek} Score ({currentYear})</h3>
                             <div className="text-4xl font-bold text-blue-400">{teamTotal.toFixed(2)}</div>
                             <p className="text-sm text-gray-400 mt-2">Current roster total</p>
                         </div>
@@ -555,7 +642,7 @@ const TeamPage = () => {
                 isOpen={showPlayerStatsModal}
                 onClose={() => setShowPlayerStatsModal(false)}
                 week={currentWeek}
-                year={2024}
+                year={currentYear}
             />
         </div>
     );

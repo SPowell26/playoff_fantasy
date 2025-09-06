@@ -9,15 +9,26 @@
 export const calculatePlayerScore = (player, scoringRules) => {
   const stats = player.stats || {};
   
+  // Debug for Saquon Barkley
+  if (player.name && player.name.toLowerCase().includes('saquon')) {
+    console.log('🎯 SAQUON CALCULATION DEBUG:');
+    console.log('  Player stats:', stats);
+    console.log('  Scoring rules:', scoringRules);
+    console.log('  rushingYards:', stats.rushingYards, '×', scoringRules.rushingYards, '=', (stats.rushingYards || 0) * (scoringRules.rushingYards || 0));
+    console.log('  rushingTD:', stats.rushingTD, '×', scoringRules.rushingTD, '=', (stats.rushingTD || 0) * (scoringRules.rushingTD || 0));
+    console.log('  receptions:', stats.receptions, '× 1 =', (stats.receptions || 0) * 1);
+  }
+  
   return (
-    (stats.passingYards || 0) * scoringRules.passingYards +
-    (stats.passingTD || 0) * scoringRules.passingTD +
-    (stats.interceptions || 0) * scoringRules.interceptions +
-    (stats.rushingYards || 0) * scoringRules.rushingYards +
-    (stats.rushingTD || 0) * scoringRules.rushingTD +
-    (stats.receivingYards || 0) * scoringRules.receivingYards +
-    (stats.receivingTD || 0) * scoringRules.receivingTD +
-    (stats.fumbles || 0) * scoringRules.fumbles
+    (stats.passingYards || 0) * (scoringRules.passingYards || 0) +
+    (stats.passingTD || 0) * (scoringRules.passingTD || 0) +
+    (stats.interceptions || 0) * (scoringRules.interceptions || 0) +
+    (stats.rushingYards || 0) * (scoringRules.rushingYards || 0) +
+    (stats.rushingTD || 0) * (scoringRules.rushingTD || 0) +
+    (stats.receivingYards || 0) * (scoringRules.receivingYards || 0) +
+    (stats.receivingTD || 0) * (scoringRules.receivingTD || 0) +
+    (stats.receptions || 0) * 1 + // 1 point per reception
+    (stats.fumbles || 0) * (scoringRules.fumbles || 0)
   );
 };
 

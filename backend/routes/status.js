@@ -6,6 +6,21 @@ let weekStatusCache = null;
 let cacheTimestamp = null;
 const CACHE_DURATION = 1000 * 60 * 60; // 1 hour cache
 
+// Helper function to map ESPN season type numbers to strings
+const mapSeasonType = (espnSeasonType) => {
+  // ESPN uses numeric season types
+  switch (espnSeasonType) {
+    case 1:
+      return 'preseason';
+    case 2:
+      return 'regular';
+    case 3:
+      return 'postseason';
+    default:
+      return 'unknown';
+  }
+};
+
 // GET current week status
 router.get('/current-week', async (req, res) => {
   try {
@@ -28,6 +43,8 @@ router.get('/current-week', async (req, res) => {
     
     console.log('📡 ESPN API Response Status:', response.status);
     console.log('📊 ESPN API Response Keys:', Object.keys(data));
+    console.log('🔍 ESPN Season Data:', data.season);
+    console.log('🔍 ESPN Week Data:', data.week);
 
     // Extract week information
     let currentWeek = null;
@@ -47,7 +64,7 @@ router.get('/current-week', async (req, res) => {
     } else if (data.week) {
       // Regular season or playoff week
       currentWeek = data.week.number;
-      seasonType = data.season.type;
+      seasonType = mapSeasonType(data.season.type);
       seasonYear = data.season.year;
       
       // Determine if we're in playoffs and which round
@@ -75,7 +92,7 @@ router.get('/current-week', async (req, res) => {
         
         if (currentEvent) {
           currentWeek = currentEvent.week?.number || 1;
-          seasonType = currentEvent.season?.type || 'regular';
+          seasonType = mapSeasonType(currentEvent.season?.type || 2);
           seasonYear = currentEvent.season?.year || new Date().getFullYear();
         }
       }

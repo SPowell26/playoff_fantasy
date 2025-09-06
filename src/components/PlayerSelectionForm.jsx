@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const PlayerSelectionForm = ({ leagueId, teamId, onPlayerAdded }) => {
+const PlayerSelectionForm = ({ leagueId, teamId, onPlayerAdded, onClose }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredPlayers, setFilteredPlayers] = useState([]);
   const [allPlayers, setAllPlayers] = useState([]);
@@ -111,143 +111,91 @@ const PlayerSelectionForm = ({ leagueId, teamId, onPlayerAdded }) => {
   };
 
   return (
-    <div className="player-selection-form">
-      <h3>Add Players to Your Team</h3>
-      
-      {/* Search Bar */}
-      <div className="search-container">
-        <input
-          type="text"
-          placeholder="Search players by name, team, or position..."
-          value={searchTerm}
-          onChange={handleSearchChange}
-          className="search-input"
-        />
-      </div>
-
-      {/* Player List */}
-      <div className="player-list">
-        {loading ? (
-          <p>Loading players...</p>
-        ) : filteredPlayers.length === 0 ? (
-          <p>No available players found.</p>
-        ) : (
-          filteredPlayers.slice(0, 20).map(player => (
-            <div
-              key={player.id}
-              className={`player-item ${selectedPlayer?.id === player.id ? 'selected' : ''}`}
-              onClick={() => handlePlayerSelect(player)}
-            >
-              <div className="player-info">
-                <span className="player-name">{player.name}</span>
-                <span className="player-details">
-                  {formatPosition(player.position)} • {player.team}
-                </span>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Add Button */}
-      {selectedPlayer && (
-        <div className="add-player-section">
-          <p>Selected: <strong>{selectedPlayer.name}</strong></p>
-          <button 
-            onClick={handleAddPlayer}
-            className="add-button"
-            disabled={!selectedPlayer}
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-gray-800 border border-gray-600 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-semibold text-white">Add Players to Your Team</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white hover:bg-gray-700 p-2 rounded-lg transition-colors"
           >
-            Add {selectedPlayer.name} to Team
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
-      )}
+        
+        {/* Search Bar */}
+        <div className="mb-6">
+          <input
+            type="text"
+            placeholder="Search players by name, team, or position..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+            className="w-full px-4 py-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
 
-      <style jsx>{`
-        .player-selection-form {
-          max-width: 600px;
-          margin: 0 auto;
-          padding: 20px;
-        }
+        {/* Player List */}
+        <div className="border border-gray-600 rounded-lg overflow-hidden">
+          {loading ? (
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-4"></div>
+              <p className="text-gray-300">Loading players...</p>
+            </div>
+          ) : filteredPlayers.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="text-gray-400">No available players found.</p>
+            </div>
+          ) : (
+            <div className="max-h-96 overflow-y-auto">
+              {filteredPlayers.slice(0, 20).map(player => (
+                <div
+                  key={player.id}
+                  className={`p-4 border-b border-gray-600 cursor-pointer transition-colors ${
+                    selectedPlayer?.id === player.id 
+                      ? 'bg-blue-900/30 border-l-4 border-l-blue-500' 
+                      : 'hover:bg-gray-700'
+                  }`}
+                  onClick={() => handlePlayerSelect(player)}
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="font-medium text-white">{player.name}</div>
+                      <div className="text-sm text-gray-400">
+                        {formatPosition(player.position)} • {player.team}
+                      </div>
+                    </div>
+                    {selectedPlayer?.id === player.id && (
+                      <div className="text-blue-400">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-        .search-container {
-          margin-bottom: 20px;
-        }
-
-        .search-input {
-          width: 100%;
-          padding: 12px;
-          border: 2px solid #ddd;
-          border-radius: 8px;
-          font-size: 16px;
-        }
-
-        .player-list {
-          max-height: 400px;
-          overflow-y: auto;
-          border: 1px solid #ddd;
-          border-radius: 8px;
-        }
-
-        .player-item {
-          padding: 12px;
-          border-bottom: 1px solid #eee;
-          cursor: pointer;
-          transition: background-color 0.2s;
-        }
-
-        .player-item:hover {
-          background-color: #f5f5f5;
-        }
-
-        .player-item.selected {
-          background-color: #e3f2fd;
-          border-left: 4px solid #2196f3;
-        }
-
-        .player-info {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .player-name {
-          font-weight: bold;
-        }
-
-        .player-details {
-          color: #666;
-          font-size: 14px;
-        }
-
-        .add-player-section {
-          margin-top: 20px;
-          padding: 15px;
-          background-color: #f8f9fa;
-          border-radius: 8px;
-          text-align: center;
-        }
-
-        .add-button {
-          background-color: #4caf50;
-          color: white;
-          border: none;
-          padding: 12px 24px;
-          border-radius: 6px;
-          font-size: 16px;
-          cursor: pointer;
-          margin-top: 10px;
-        }
-
-        .add-button:hover {
-          background-color: #45a049;
-        }
-
-        .add-button:disabled {
-          background-color: #ccc;
-          cursor: not-allowed;
-        }
-      `}</style>
+        {/* Add Button */}
+        {selectedPlayer && (
+          <div className="mt-6 p-4 bg-gray-700 border border-gray-600 rounded-lg text-center">
+            <p className="text-gray-300 mb-3">
+              Selected: <strong className="text-white">{selectedPlayer.name}</strong>
+            </p>
+            <button 
+              onClick={handleAddPlayer}
+              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+              disabled={!selectedPlayer}
+            >
+              Add {selectedPlayer.name} to Team
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

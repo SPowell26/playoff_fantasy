@@ -5,18 +5,40 @@ const YearlyContext = createContext();
 
 //Provider component
 export function YearlyProvider({children}) {
-  const[currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const[currentWeek, setCurrentWeek] = useState(null);
-  const[seasonType, setSeasonType] = useState(null);
-  const[isPlayoffs, setIsPlayoffs] = useState(false);
-  const[playoffRound, setPlayoffRound] = useState(null);
-  const[weekStatusLoading, setWeekStatusLoading] = useState(true);
-  const[weekStatusError, setWeekStatusError] = useState(null);
+  // Calendar year (what year it actually is)
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  
+  // NFL Season year (the season that started in this calendar year)
+  const [nflSeasonYear, setNflSeasonYear] = useState(new Date().getFullYear());
+  
+  const [currentWeek, setCurrentWeek] = useState(null);
+  const [seasonType, setSeasonType] = useState(null);
+  const [isPlayoffs, setIsPlayoffs] = useState(false);
+  const [playoffRound, setPlayoffRound] = useState(null);
+  const [weekStatusLoading, setWeekStatusLoading] = useState(true);
+  const [weekStatusError, setWeekStatusError] = useState(null);
 
   // Playoff teams by year
   const playoffTeamsByYear = {
     2024: ["KC", "BAL", "BUF", "HOU", "SF", "DET", "GB", "TB"],
     2025: [] // Will be filled when 2025 playoffs are known
+  };
+
+  // Helper function to determine NFL season year based on calendar year and month
+  const getNflSeasonYear = (year, month) => {
+    // NFL season typically starts in September (month 8)
+    // If we're in January-July, we're still in the previous year's season
+    // If we're in August-December, we're in the new season
+    if (month >= 8) {
+      return year; // New season starting
+    } else {
+      return year - 1; // Still in previous year's season
+    }
+  };
+
+  // Helper function to get season display string
+  const getSeasonDisplayString = (nflYear) => {
+    return `${nflYear}-${nflYear + 1}`;
   };
 
   // Fetch current week status from backend API
@@ -37,12 +59,28 @@ export function YearlyProvider({children}) {
       setIsPlayoffs(data.isPlayoffs);
       setPlayoffRound(data.playoffRound);
       
-      // Update year if we got it from the API
+      // Update calendar year
+      const now = new Date();
+      const currentCalendarYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1; // January = 1
+      
+      setCalendarYear(currentCalendarYear);
+      
+      // Determine NFL season year based on calendar year and month
+      const seasonYear = getNflSeasonYear(currentCalendarYear, currentMonth);
+      setNflSeasonYear(seasonYear);
+      
+      // If we got season year from API, use that instead
       if (data.seasonYear) {
-        setCurrentYear(data.seasonYear);
+        setNflSeasonYear(data.seasonYear);
       }
       
-      console.log('✅ Week status updated:', data);
+      console.log('✅ Week status updated:', {
+        ...data,
+        calendarYear: currentCalendarYear,
+        nflSeasonYear: seasonYear,
+        seasonDisplay: getSeasonDisplayString(seasonYear)
+      });
       
     } catch (error) {
       console.error('❌ Failed to fetch week status:', error);
@@ -67,16 +105,32 @@ export function YearlyProvider({children}) {
   };
 
   const value = {
-    currentYear,
-    setCurrentYear,
+    // Calendar year (what year it actually is)
+    calendarYear,
+    setCalendarYear,
+    
+    // NFL Season year (the season that started in this calendar year)
+    nflSeasonYear,
+    setNflSeasonYear,
+    
+    // Season display string (e.g., "2024-25")
+    seasonDisplay: getSeasonDisplayString(nflSeasonYear),
+    
+    // Week and season info
     currentWeek,
     seasonType,
     isPlayoffs,
     playoffRound,
+    
+    // Loading states
     weekStatusLoading,
     weekStatusError,
     refreshWeekStatus: fetchWeekStatus,
-    getPlayoffTeamsForYear
+    
+    // Helper functions
+    getPlayoffTeamsForYear,
+    getNflSeasonYear,
+    getSeasonDisplayString
   };
 
   return (

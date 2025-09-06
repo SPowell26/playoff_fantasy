@@ -20,55 +20,69 @@ const Dashboard = () => {
   const sortedYears = Object.keys(leaguesByYear).sort((a, b) => b - a);
 
   return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <h1>🏈 Fantasy Playoff Dashboard</h1>
-        <p>Manage your fantasy football leagues</p>
+    <div className="min-h-screen bg-gray-900">
+      <div className="bg-gray-800 shadow-lg border-b border-gray-700 mb-6">
+        <div className="px-6 py-8 text-center">
+          <h1 className="text-4xl font-bold text-white mb-3">🏈 Fantasy Playoff Dashboard</h1>
+          <p className="text-xl text-gray-300">Manage your fantasy football leagues</p>
+        </div>
       </div>
 
       {/* Current Week Status */}
-      <WeekStatus />
+      <div className="mb-8">
+        <WeekStatus />
+      </div>
 
       {/* Create New League Button */}
-      <div className="create-league-section">
-        <Link to="/create-league" className="create-league-button">
+      <div className="bg-gray-800 p-6 rounded-lg mb-8 border border-gray-700 text-center">
+        <Link to="/create-league" className="inline-block bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white px-8 py-4 rounded-lg transition-all duration-200 font-semibold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-1">
           ➕ Create New League
         </Link>
       </div>
 
       {/* Leagues by Year */}
       {sortedYears.length === 0 ? (
-        <div className="no-leagues">
-          <h2>No leagues yet!</h2>
-          <p>Create your first fantasy playoff league to get started.</p>
+        <div className="bg-gray-800 p-12 rounded-lg border border-gray-700 text-center">
+          <h2 className="text-2xl font-semibold text-white mb-4">No leagues yet!</h2>
+          <p className="text-gray-400 text-lg">Create your first fantasy playoff league to get started.</p>
         </div>
       ) : (
         sortedYears.map(year => (
-          <div key={year} className="year-section">
-            <h2 className="year-header">
+          <div key={year} className="mb-12">
+            <h2 className="text-2xl font-semibold text-white mb-8 text-center border-b-2 border-blue-600 pb-3">
               {year === currentYear.toString() ? '🏆 Current Season' : `📚 ${year} Season`}
             </h2>
             
-            <div className="leagues-grid">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {leaguesByYear[year].map(league => (
-                <div key={league.id} className="league-card">
-                  <div className="league-card-header">
-                    <h3>{league.name}</h3>
-                    <span className={`status-badge ${league.year === currentYear ? 'active' : 'past'}`}>
-                      {league.year === currentYear ? 'Active' : 'Past'}
-                    </span>
+                <div key={league.id} className="bg-gray-800 border border-gray-700 rounded-lg p-6 transition-all duration-200 hover:border-blue-500 hover:shadow-lg hover:transform hover:-translate-y-1">
+                  <div className="relative">
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-t-lg"></div>
                   </div>
                   
-                  <div className="league-info">
-                    <p><strong>Commissioner:</strong> {league.commissioner}</p>
-                    <p><strong>Teams:</strong> {league.teams?.length || 0}</p>
-                    <p><strong>Current Week:</strong> {league.current_week || 'Not Started'}</p>
+                  <div className="mt-2 mb-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-xl font-semibold text-white">{league.name}</h3>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                        league.year === currentYear 
+                          ? 'bg-green-600 text-white' 
+                          : 'bg-gray-600 text-gray-300'
+                      }`}>
+                        {league.year === currentYear ? 'Active' : 'Past'}
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <p className="text-gray-300"><span className="font-medium text-gray-200">Commissioner:</span> {league.commissioner}</p>
+                      <p className="text-gray-300"><span className="font-medium text-gray-200">Teams:</span> {league.teams?.length || 0}</p>
+                      <p className="text-gray-300"><span className="font-medium text-gray-200">Current Week:</span> {league.current_week || 'Not Started'}</p>
+                    </div>
                   </div>
 
-                  <div className="league-actions">
+                  <div className="flex space-x-3">
                     <Link 
                       to={`/league/${league.id}`} 
-                      className="view-league-button"
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-center font-medium transition-colors"
                     >
                       👁️ View League
                     </Link>
@@ -76,7 +90,7 @@ const Dashboard = () => {
                     {league.year === currentYear && (
                       <Link 
                         to={`/league/${league.id}/manage`} 
-                        className="manage-league-button"
+                        className="flex-1 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-center font-medium transition-colors"
                       >
                         ⚙️ Manage
                       </Link>
@@ -88,202 +102,6 @@ const Dashboard = () => {
           </div>
         ))
       )}
-
-      <style jsx>{`
-        .dashboard {
-          max-width: 1400px;
-          margin: 0 auto;
-          padding: 20px;
-        }
-
-        .dashboard-header {
-          text-align: center;
-          margin-bottom: 40px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 40px;
-          border-radius: 16px;
-        }
-
-        .dashboard-header h1 {
-          margin: 0 0 10px 0;
-          font-size: 3rem;
-        }
-
-        .dashboard-header p {
-          margin: 0;
-          font-size: 1.2rem;
-          opacity: 0.9;
-        }
-
-        .create-league-section {
-          text-align: center;
-          margin-bottom: 40px;
-        }
-
-        .create-league-button {
-          display: inline-block;
-          background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
-          color: white;
-          padding: 15px 30px;
-          border-radius: 50px;
-          text-decoration: none;
-          font-size: 1.1rem;
-          font-weight: bold;
-          transition: all 0.3s ease;
-          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        }
-
-        .create-league-button:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-        }
-
-        .year-section {
-          margin-bottom: 50px;
-        }
-
-        .year-header {
-          text-align: center;
-          margin-bottom: 30px;
-          color: #333;
-          font-size: 2rem;
-          border-bottom: 3px solid #667eea;
-          padding-bottom: 10px;
-        }
-
-        .leagues-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-          gap: 25px;
-        }
-
-        .league-card {
-          background: white;
-          border: 2px solid #e0e0e0;
-          border-radius: 16px;
-          padding: 25px;
-          transition: all 0.3s ease;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-          position: relative;
-          overflow: hidden;
-        }
-
-        .league-card::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 4px;
-          background: linear-gradient(90deg, #667eea, #764ba2);
-        }
-
-        .league-card:hover {
-          transform: translateY(-6px);
-          box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
-          border-color: #667eea;
-        }
-
-        .league-card-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 15px;
-        }
-
-        .league-card-header h3 {
-          margin: 0;
-          color: #333;
-          font-size: 1.4rem;
-        }
-
-        .status-badge {
-          padding: 5px 12px;
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: bold;
-          text-transform: uppercase;
-        }
-
-        .status-badge.active {
-          background-color: #4caf50;
-          color: white;
-        }
-
-        .status-badge.past {
-          background-color: #9e9e9e;
-          color: white;
-        }
-
-        .league-info {
-          margin-bottom: 20px;
-        }
-
-        .league-info p {
-          margin: 8px 0;
-          color: #666;
-        }
-
-        .league-info strong {
-          color: #333;
-        }
-
-        .league-actions {
-          display: flex;
-          gap: 10px;
-        }
-
-        .view-league-button, .manage-league-button {
-          flex: 1;
-          padding: 10px 15px;
-          border: none;
-          border-radius: 8px;
-          text-decoration: none;
-          text-align: center;
-          font-size: 14px;
-          font-weight: bold;
-          transition: all 0.3s ease;
-        }
-
-        .view-league-button {
-          background-color: #667eea;
-          color: white;
-        }
-
-        .view-league-button:hover {
-          background-color: #5a6fd8;
-          transform: translateY(-2px);
-        }
-
-        .manage-league-button {
-          background-color: #4ecdc4;
-          color: white;
-        }
-
-        .manage-league-button:hover {
-          background-color: #45b7aa;
-          transform: translateY(-2px);
-        }
-
-        .no-leagues {
-          text-align: center;
-          padding: 60px 20px;
-          color: #666;
-        }
-
-        .no-leagues h2 {
-          color: #333;
-          margin-bottom: 10px;
-        }
-
-        .loading {
-          text-align: center;
-          padding: 60px;
-          font-size: 1.2rem;
-          color: #666;
-        }
-      `}</style>
     </div>
   );
 };

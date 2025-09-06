@@ -272,7 +272,7 @@ export function DataProvider({ children }) {
                     stats: player.weeklyStats[week] || {} // Extract the week's stats
                 }));
                 
-                setPlayers(transformedPlayers);
+                // Don't overwrite the players array - just store the stats
                 setRealStats(prev => ({ ...prev, [week]: data }));
                 
                 console.log(`🎯 Transformed ${transformedPlayers.length} players for scoring engine`);
@@ -285,24 +285,89 @@ export function DataProvider({ children }) {
             }
         };
 
+        // Helper function to search for players by name in stats
+        const searchPlayerByName = (week, playerName) => {
+            if (!realStats[week] || !realStats[week].players) return null;
+            
+            const found = realStats[week].players.find(p => 
+                p.name.toLowerCase().includes(playerName.toLowerCase()) ||
+                playerName.toLowerCase().includes(p.name.toLowerCase())
+            );
+            
+            if (found) {
+                console.log(`🔍 Found player by name search:`, found);
+                return found;
+            }
+            
+            return null;
+        };
+
         // Function to get player with real stats for scoring
         const getPlayerWithRealStats = (playerId, week = 1) => {
-            const player = players.find(p => p.id === playerId);
-            if (!player) return null;
+            console.log(`🔍 getPlayerWithRealStats called with playerId: ${playerId}, week: ${week}`);
+            console.log(`🔍 Available realStats keys:`, Object.keys(realStats));
+            console.log(`🔍 Looking for realStats[${week}]:`, realStats[week]);
             
             // If we have real stats for this week, use them
             if (realStats[week] && realStats[week].players) {
+                console.log(`🔍 Found realStats[${week}].players, searching for player ${playerId}`);
+                console.log(`🔍 Total players in realStats[${week}]:`, realStats[week].players.length);
+                
+                // Log a sample of available players for debugging
+                if (week === 3) {
+                    console.log(`🔍 Week 3 players sample:`, realStats[week].players.slice(0, 3).map(p => ({ id: p.id, name: p.name, position: p.position })));
+                }
+                
                 const realPlayer = realStats[week].players.find(p => p.id === playerId);
-                if (realPlayer && realPlayer.weeklyStats[week]) {
-                    return {
-                        ...player,
-                        stats: realPlayer.weeklyStats[week]
+                console.log(`🔍 Real player found:`, realPlayer);
+                
+                if (realPlayer && realPlayer.weeklyStats && realPlayer.weeklyStats[week]) {
+                    console.log(`✅ Found real player stats for player ${playerId}:`, realPlayer.weeklyStats[week]);
+                    
+                    // The stats are already in camelCase format, so use them directly
+                    const rawStats = realPlayer.weeklyStats[week];
+                    console.log('🔍 Raw stats (already camelCase):', rawStats);
+                    
+                    const transformedStats = {
+                        passingYards: rawStats.passingYards || 0,
+                        passingTD: rawStats.passingTD || 0,
+                        interceptions: rawStats.interceptions || 0,
+                        rushingYards: rawStats.rushingYards || 0,
+                        rushingTD: rawStats.rushingTD || 0,
+                        receivingYards: rawStats.receivingYards || 0,
+                        receivingTD: rawStats.receivingTD || 0,
+                        fumbles: rawStats.fumbles || 0,
+                        receptions: rawStats.receptions || 0
                     };
+                    
+                    console.log('🔍 Transformed stats:', transformedStats);
+                    
+                    return {
+                        id: playerId,
+                        name: realPlayer.name,
+                        position: realPlayer.position,
+                        team: realPlayer.team,
+                        stats: transformedStats
+                    };
+                } else {
+                    // Player not found - let's search by name to see if there's a mismatch
+                    console.log(`🔍 Player ${playerId} not found in stats. Searching for similar names...`);
+                    // This will help us see if the player exists with a different ID
+                    
+                    // Try to find the player by name from the team roster
+                    // We need to get the player name from somewhere - let's check if we can get it from the team data
+                    console.log(`🔍 Attempting name search for player ID ${playerId}`);
+                }
+            } else {
+                console.log(`❌ No realStats[${week}] or no players in realStats[${week}]`);
+                if (realStats[week]) {
+                    console.log(`🔍 realStats[${week}] structure:`, realStats[week]);
                 }
             }
             
-            // Fallback to existing stats
-            return player;
+            // Fallback to null if no stats found
+            console.log(`🔄 No stats found for player ${playerId}, returning null`);
+            return null;
         };
 
     const value = {

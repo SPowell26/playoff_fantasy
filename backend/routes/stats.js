@@ -1147,6 +1147,342 @@ router.get('/week/:week/leaders', async (req, res) => {
   }
 });
 
+// GET all available weeks from player_stats table
+router.get('/available-weeks', async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    
+    const query = `
+      SELECT DISTINCT week, year
+      FROM player_stats
+      ORDER BY year DESC, week ASC
+    `;
+    
+    const result = await db.query(query);
+    
+    res.json({
+      count: result.rows.length,
+      weeks: result.rows
+    });
+    
+  } catch (error) {
+    console.error('Error fetching available weeks:', error);
+    res.status(500).json({ error: 'Failed to fetch available weeks' });
+  }
+});
+
+// POST endpoint to manually import stats for a specific week
+router.post('/import-week', async (req, res) => {
+  try {
+    const { week, year } = req.body;
+    
+    if (!week || !year) {
+      return res.status(400).json({ 
+        error: 'Missing required parameters', 
+        message: 'Please provide both week and year' 
+      });
+    }
+    
+    console.log(`🔄 Manual import requested for Week ${week}, Year ${year}`);
+    
+    // Call the ESPN API for the specific week
+    const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&year=${year}`);
+    
+    if (!response.ok) {
+      throw new Error(`ESPN API returned ${response.status}`);
+    }
+    
+    const scoreboardData = await response.json();
+    console.log(`✅ ESPN API response received for Week ${week}, Year ${year}`);
+    
+    if (!scoreboardData.events || !Array.isArray(scoreboardData.events)) {
+      return res.status(400).json({ 
+        error: 'No events found for specified week',
+        week,
+        year 
+      });
+    }
+    
+    // Determine season type from ESPN data
+    const espnSeasonTypeId = scoreboardData.season?.type;
+    let seasonType = 'Unknown';
+    
+    if (espnSeasonTypeId !== undefined) {
+      switch (espnSeasonTypeId) {
+        case 1:
+          seasonType = 'preseason';
+          break;
+        case 2:
+          seasonType = 'regular';
+          break;
+        case 3:
+          seasonType = 'postseason';
+          break;
+        case 4:
+          seasonType = 'offseason';
+          break;
+        default:
+          seasonType = `unknown_${espnSeasonTypeId}`;
+      }
+    }
+    
+    console.log(`📊 Processing Week ${week}, Year ${year}, Type: ${seasonType} (ESPN ID: ${espnSeasonTypeId})`);
+    console.log(`🏈 Found ${scoreboardData.events.length} games this week`);
+    
+    // Process all games for the week (using the same logic as weekly-update)
+    const allPlayerStats = [];
+    const playersToCreate = new Map();
+    let processedGames = 0;
+    let failedGames = 0;
+    
+    for (const game of scoreboardData.events) {
+      console.log(`\n🏈 Processing game: ${game.name} (ID: ${game.id})`);
+      
+      try {
+        // Get detailed game stats from ESPN Game Summary API
+        const gameSummaryUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${game.id}`;
+        const gameSummaryResponse = await fetch(gameSummaryUrl);
+        
+        if (!gameSummaryResponse.ok) {
+          console.log(`❌ Failed to get game summary for ${game.name}: ${gameSummaryResponse.status}`);
+          failedGames++;
+          continue;
+        }
+        
+        const gameSummaryData = await gameSummaryResponse.json();
+        
+        if (!gameSummaryData.boxscore || !gameSummaryData.boxscore.players) {
+          console.log(`❌ No player stats found for ${game.name}`);
+          failedGames++;
+          continue;
+        }
+        
+        // Extract field goal distances from scoring plays
+        const fieldGoalDistances = extractFieldGoalDistances(gameSummaryData.scoringPlays);
+        
+        // Extract player stats from both teams
+        const teams = gameSummaryData.boxscore.players;
+        
+        for (let teamIndex = 0; teamIndex <= 1; teamIndex++) {
+          const team = teams[teamIndex];
+          if (!team || !team.statistics) continue;
+          
+          // Process each statistic category
+          for (const statCategory of team.statistics) {
+            if (!statCategory.athletes || !Array.isArray(statCategory.athletes) || statCategory.athletes.length === 0) {
+              continue;
+            }
+            
+            // Process each player's stats
+            for (const athlete of statCategory.athletes) {
+              if (!athlete.athlete || !athlete.stats) continue;
+              
+              const playerName = athlete.athlete.displayName;
+              const playerId = athlete.athlete.id;
+              const playerPosition = athlete.athlete.position?.abbreviation || 'UNK';
+              
+              // Skip defensive players (DEF) - we only want offensive players for fantasy
+              if (playerPosition === 'DEF') {
+                continue;
+              }
+              
+              // Check if player exists in database
+              const db = req.app.locals.db;
+              const playerExists = await db.query('SELECT id FROM players WHERE id = $1', [playerId]);
+              
+              if (playerExists.rows.length === 0) {
+                // Player doesn't exist, add to creation list
+                playersToCreate.set(playerId, {
+                  id: playerId,
+                  name: playerName,
+                  position: playerPosition,
+                  team: athlete.athlete.team?.abbreviation || 'FA',
+                  jersey_number: athlete.athlete.jersey,
+                  height: athlete.athlete.height,
+                  weight: athlete.athlete.weight,
+                  age: athlete.athlete.age,
+                  experience: athlete.athlete.experience,
+                  college: athlete.athlete.college?.name,
+                  status: 'Active'
+                });
+              }
+              
+              // Check if we already have stats for this player in this week
+              let existingPlayerStat = allPlayerStats.find(stat => 
+                stat.player_id === playerId && 
+                stat.week === week && 
+                stat.year === year
+              );
+              
+              if (!existingPlayerStat) {
+                // First time processing this player this week, create new stat object
+                existingPlayerStat = {
+                  player_id: playerId,
+                  week: week,
+                  year: year,
+                  season_type: seasonType.toLowerCase(),
+                  source: 'espn',
+                  // Initialize all stats to 0
+                  passing_yards: 0, passing_touchdowns: 0, interceptions: 0,
+                  rushing_yards: 0, rushing_touchdowns: 0,
+                  receiving_yards: 0, receiving_touchdowns: 0, receptions: 0,
+                  fumbles_lost: 0, sacks: 0, interceptions_defense: 0,
+                  fumble_recoveries: 0, safeties: 0, blocked_kicks: 0,
+                  punt_return_touchdowns: 0, kickoff_return_touchdowns: 0,
+                  points_allowed: 0, field_goals_0_39: 0, field_goals_40_49: 0,
+                  field_goals_50_plus: 0, extra_points: 0
+                };
+                allPlayerStats.push(existingPlayerStat);
+              }
+              
+              // Map the stat category and merge with existing stats
+              const newStats = mapESPNStatsToDatabase(statCategory.name, athlete.stats, fieldGoalDistances, playerName);
+              
+              if (newStats) {
+                // Merge the new stats with existing stats
+                Object.keys(newStats).forEach(key => {
+                  if (newStats[key] > 0) {
+                    existingPlayerStat[key] = newStats[key];
+                  }
+                });
+              }
+            }
+          }
+        }
+        
+        processedGames++;
+        
+      } catch (gameError) {
+        console.error(`❌ Error processing game ${game.name}:`, gameError.message);
+        failedGames++;
+      }
+    }
+    
+    console.log(`\n📊 Week ${week} processing complete:`);
+    console.log(`   Games processed: ${processedGames}`);
+    console.log(`   Games failed: ${failedGames}`);
+    console.log(`   Total player stats: ${allPlayerStats.length}`);
+    console.log(`   Players to create: ${playersToCreate.size}`);
+    
+    // Create any missing players
+    let playersCreated = 0;
+    const db = req.app.locals.db;
+    for (const [playerId, playerData] of playersToCreate) {
+      try {
+        await db.query(
+          `INSERT INTO players (id, name, position, team, jersey_number, height, weight, age, experience, college, status) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           position = EXCLUDED.position,
+           team = EXCLUDED.team,
+           jersey_number = EXCLUDED.jersey_number,
+           height = EXCLUDED.height,
+           weight = EXCLUDED.weight,
+           age = EXCLUDED.age,
+           experience = EXCLUDED.experience,
+           college = EXCLUDED.college,
+           status = EXCLUDED.status,
+           last_updated = CURRENT_TIMESTAMP`,
+          [
+            playerData.id, playerData.name, playerData.position, playerData.team,
+            playerData.jersey_number, playerData.height, playerData.weight,
+            playerData.age, playerData.experience, playerData.college, playerData.status
+          ]
+        );
+        playersCreated++;
+      } catch (playerError) {
+        console.error(`Failed to create player ${playerData.name}:`, playerError);
+      }
+    }
+    
+    console.log(`✅ Created ${playersCreated} new players`);
+    
+    // Insert stats into database
+    let insertedCount = 0;
+    let updatedCount = 0;
+    
+    for (const stat of allPlayerStats) {
+      try {
+        const result = await db.query(
+          `INSERT INTO player_stats (
+            player_id, week, year, season_type, passing_yards, passing_touchdowns, interceptions,
+            rushing_yards, rushing_touchdowns, receiving_yards, receiving_touchdowns, receptions,
+            fumbles_lost, sacks, interceptions_defense, fumble_recoveries, safeties,
+            blocked_kicks, punt_return_touchdowns, kickoff_return_touchdowns,
+            points_allowed, field_goals_0_39, field_goals_40_49, field_goals_50_plus,
+            extra_points
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+          ON CONFLICT (player_id, week, year) DO UPDATE SET
+            season_type = EXCLUDED.season_type,
+            passing_yards = EXCLUDED.passing_yards,
+            passing_touchdowns = EXCLUDED.passing_touchdowns,
+            interceptions = EXCLUDED.interceptions,
+            rushing_yards = EXCLUDED.rushing_yards,
+            rushing_touchdowns = EXCLUDED.rushing_touchdowns,
+            receiving_yards = EXCLUDED.receiving_yards,
+            receiving_touchdowns = EXCLUDED.receiving_touchdowns,
+            receptions = EXCLUDED.receptions,
+            fumbles_lost = EXCLUDED.fumbles_lost,
+            sacks = EXCLUDED.sacks,
+            interceptions_defense = EXCLUDED.interceptions_defense,
+            fumble_recoveries = EXCLUDED.fumble_recoveries,
+            safeties = EXCLUDED.safeties,
+            blocked_kicks = EXCLUDED.blocked_kicks,
+            punt_return_touchdowns = EXCLUDED.punt_return_touchdowns,
+            kickoff_return_touchdowns = EXCLUDED.kickoff_return_touchdowns,
+            points_allowed = EXCLUDED.points_allowed,
+            field_goals_0_39 = EXCLUDED.field_goals_0_39,
+            field_goals_40_49 = EXCLUDED.field_goals_40_49,
+            field_goals_50_plus = EXCLUDED.field_goals_50_plus,
+            extra_points = EXCLUDED.extra_points,
+            updated_at = CURRENT_TIMESTAMP`,
+          [
+            stat.player_id, stat.week, stat.year, stat.season_type,
+            stat.passing_yards, stat.passing_touchdowns, stat.interceptions,
+            stat.rushing_yards, stat.rushing_touchdowns, stat.receiving_yards,
+            stat.receiving_touchdowns, stat.receptions, stat.fumbles_lost,
+            stat.sacks, stat.interceptions_defense, stat.fumble_recoveries,
+            stat.safeties, stat.blocked_kicks, stat.punt_return_touchdowns,
+            stat.kickoff_return_touchdowns, stat.points_allowed,
+            stat.field_goals_0_39, stat.field_goals_40_49, stat.field_goals_50_plus,
+            stat.extra_points
+          ]
+        );
+        
+        if (result.rowCount > 0) {
+          insertedCount++;
+        }
+        
+      } catch (statError) {
+        console.error(`Failed to insert/update stats for player ${stat.player_id}:`, statError);
+      }
+    }
+    
+    console.log(`✅ Stats processing complete: ${insertedCount} records inserted/updated`);
+    
+    res.json({
+      success: true,
+      message: `Import completed for Week ${week}, Year ${year}`,
+      week,
+      year,
+      seasonType,
+      gamesProcessed: processedGames,
+      gamesFailed: failedGames,
+      playersCreated,
+      statsProcessed: insertedCount,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in manual week import:', error);
+    res.status(500).json({ 
+      error: 'Failed to import week',
+      message: error.message 
+    });
+  }
+});
+
 // Helper functions (moved from players route)
 function extractFieldGoalDistances(scoringPlays) {
   const fieldGoalDistances = {};
