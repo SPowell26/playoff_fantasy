@@ -341,7 +341,23 @@ export function DataProvider({ children }) {
                         receivingYards: rawStats.receivingYards || 0,
                         receivingTD: rawStats.receivingTD || 0,
                         fumbles: rawStats.fumbles || 0,
-                        receptions: rawStats.receptions || 0
+                        receptions: rawStats.receptions || 0,
+                        // Kicker stats - individual distance categories
+                        fieldGoals0_39: rawStats.fieldGoals0_39 || 0,
+                        fieldGoals40_49: rawStats.fieldGoals40_49 || 0,
+                        fieldGoals50_plus: rawStats.fieldGoals50_plus || 0,
+                        fieldGoalsMade: rawStats.fieldGoalsMade || 0,
+                        extraPointsMade: rawStats.extraPointsMade || 0,
+                        fieldGoalsMissed: rawStats.fieldGoalsMissed || 0,
+                        // Defense stats
+                        sacks: rawStats.sacks || 0,
+                        interceptions: rawStats.interceptions || 0,
+                        fumbleRecoveries: rawStats.fumbleRecoveries || 0,
+                        safeties: rawStats.safeties || 0,
+                        blockedKicks: rawStats.blockedKicks || 0,
+                        puntReturnTD: rawStats.puntReturnTD || 0,
+                        kickoffReturnTD: rawStats.kickoffReturnTD || 0,
+                        pointsAllowed: rawStats.pointsAllowed || 0
                     };
                     
                     console.log('🔍 Transformed stats:', transformedStats);

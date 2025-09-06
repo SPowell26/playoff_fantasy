@@ -233,6 +233,10 @@ const TeamPage = () => {
         grouped[player.position].push(player);
     });
     console.log("grouped players with real stats:", grouped);
+    
+    // Debug kicker positions specifically
+    const kickers = teamWithRealStats.players.filter(p => p.position === 'K' || p.position === 'PK');
+    console.log("🦵 Kickers found:", kickers.map(k => ({ name: k.name, position: k.position, stats: k.stats })));
 
     const getPositionColor = (position) => {
         const colors = {
@@ -511,8 +515,8 @@ const TeamPage = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-900/50 border border-yellow-600 text-yellow-300">K</div>
-                                        {getRosterSpotPlayer(grouped, 'PK', 0) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer(grouped, 'PK', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                        {getRosterSpotPlayer(grouped, 'K', 0) || getRosterSpotPlayer(grouped, 'PK', 0) ? (
+                                            <RosterPlayer player={getRosterSpotPlayer(grouped, 'K', 0) || getRosterSpotPlayer(grouped, 'PK', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}

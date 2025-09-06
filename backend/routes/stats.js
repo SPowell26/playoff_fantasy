@@ -1053,7 +1053,10 @@ router.get('/scoring-ready/:week', async (req, res) => {
           receptions: stat.receptions || 0,
           fumbles: stat.fumbles_lost || 0,
           
-          // Kicker stats
+          // Kicker stats - provide individual distance categories for proper scoring
+          fieldGoals0_39: stat.field_goals_0_39 || 0,
+          fieldGoals40_49: stat.field_goals_40_49 || 0,
+          fieldGoals50_plus: stat.field_goals_50_plus || 0,
           fieldGoalsMade: (stat.field_goals_0_39 || 0) + (stat.field_goals_40_49 || 0) + (stat.field_goals_50_plus || 0),
           extraPointsMade: stat.extra_points || 0,
           fieldGoalsMissed: 0, // Not tracked in current import
@@ -1497,7 +1500,12 @@ function extractFieldGoalDistances(scoringPlays) {
       if (match) {
         const kickerName = match[1].trim();
         const distance = parseInt(match[2]);
-        fieldGoalDistances[kickerName] = distance;
+        
+        // Store all field goal distances for each kicker
+        if (!fieldGoalDistances[kickerName]) {
+          fieldGoalDistances[kickerName] = [];
+        }
+        fieldGoalDistances[kickerName].push(distance);
       }
     }
   }
@@ -1582,18 +1590,28 @@ function mapESPNStatsToDatabase(statCategory, stats, fieldGoalDistances, playerN
           mappedStats.extra_points = parseInt(made) || 0;
         }
         
-        // Parse field goal distance from long field goal
-        let fgDistance = 0;
-        if (fieldGoalDistances[playerName]) {
-          fgDistance = fieldGoalDistances[playerName];
+        // Parse field goal distances from scoring plays
+        if (fieldGoalDistances[playerName] && Array.isArray(fieldGoalDistances[playerName])) {
+          console.log(`    🦵 Field goal distances for ${playerName}:`, fieldGoalDistances[playerName]);
+          // Count field goals by distance category
+          fieldGoalDistances[playerName].forEach(distance => {
+            if (distance <= 39) {
+              mappedStats.field_goals_0_39 = (mappedStats.field_goals_0_39 || 0) + 1;
+            } else if (distance <= 49) {
+              mappedStats.field_goals_40_49 = (mappedStats.field_goals_40_49 || 0) + 1;
+            } else {
+              mappedStats.field_goals_50_plus = (mappedStats.field_goals_50_plus || 0) + 1;
+            }
+          });
+          console.log(`    🦵 Mapped FG stats: 0-39: ${mappedStats.field_goals_0_39 || 0}, 40-49: ${mappedStats.field_goals_40_49 || 0}, 50+: ${mappedStats.field_goals_50_plus || 0}`);
         } else if (stats[2] && stats[2] !== '100.0') {
-          fgDistance = parseInt(stats[2]);
-        }
-        
-        if (fgDistance > 0) {
-          if (fgDistance <= 39) mappedStats.field_goals_0_39 = 1;
-          else if (fgDistance <= 49) mappedStats.field_goals_40_49 = 1;
-          else mappedStats.field_goals_50_plus = 1;
+          // Fallback to long field goal if no scoring plays data
+          const fgDistance = parseInt(stats[2]);
+          if (fgDistance > 0) {
+            if (fgDistance <= 39) mappedStats.field_goals_0_39 = 1;
+            else if (fgDistance <= 49) mappedStats.field_goals_40_49 = 1;
+            else mappedStats.field_goals_50_plus = 1;
+          }
         }
         console.log(`    📊 FG: ${stats[0]}, PCT: ${stats[1]}, Long: ${stats[2]}, XP: ${stats[3]}, Total: ${stats[4]}`);
       }

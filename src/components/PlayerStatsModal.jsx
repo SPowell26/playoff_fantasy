@@ -8,6 +8,49 @@ const PlayerStatsModal = ({ player, isOpen, onClose }) => {
   // Get current week/season from context instead of props
   const { currentWeek, nflSeasonYear, seasonDisplay, seasonType, isPlayoffs } = useYearly();
 
+  // Calculate total fantasy points from individual stats
+  const calculateTotalPoints = (stats) => {
+    if (!stats) return 0;
+    
+    let total = 0;
+    
+    // Passing stats
+    total += (stats.passing_yards || 0) * 0.04;
+    total += (stats.passing_touchdowns || 0) * 4;
+    total += (stats.interceptions || 0) * -2;
+    
+    // Rushing stats
+    total += (stats.rushing_yards || 0) * 0.1;
+    total += (stats.rushing_touchdowns || 0) * 6;
+    
+    // Receiving stats
+    total += (stats.receptions || 0) * 1;
+    total += (stats.receiving_yards || 0) * 0.1;
+    total += (stats.receiving_touchdowns || 0) * 6;
+    
+    // Kicking stats
+    total += (stats.field_goals_0_39 || 0) * 3;
+    total += (stats.field_goals_40_49 || 0) * 4;
+    total += (stats.field_goals_50_plus || 0) * 5;
+    total += (stats.extra_points || 0) * 1;
+    
+    // Defense stats
+    total += (stats.sacks || 0) * 1;
+    total += (stats.interceptions_defense || 0) * 2;
+    total += (stats.fumble_recoveries || 0) * 1;
+    total += (stats.safeties || 0) * 2;
+    total += (stats.blocked_kicks || 0) * 2;
+    
+    // Special teams
+    total += (stats.punt_return_touchdowns || 0) * 6;
+    total += (stats.kickoff_return_touchdowns || 0) * 6;
+    
+    // Penalties
+    total += (stats.fumbles_lost || 0) * -2;
+    
+    return total;
+  };
+
   // Fetch player stats when modal opens
   useEffect(() => {
     if (isOpen && player && currentWeek && nflSeasonYear) {
@@ -74,7 +117,7 @@ const PlayerStatsModal = ({ player, isOpen, onClose }) => {
             <div>
               <div className="mb-4 p-3 bg-gray-700 border border-gray-600 rounded-lg">
                 <h3 className="font-semibold text-lg text-center text-white">
-                  Total Points: {playerStats.stats?.[0]?.fantasy_points?.toFixed(2) || '0.00'}
+                  Total Points: {calculateTotalPoints(playerStats.stats?.[0]).toFixed(2)}
                 </h3>
               </div>
               
@@ -141,10 +184,18 @@ const PlayerStatsModal = ({ player, isOpen, onClose }) => {
                     )}
 
                     {/* Receiving Stats */}
-                    {(playerStats.stats[0].receiving_yards > 0 || playerStats.stats[0].receiving_touchdowns > 0) && (
+                    {(playerStats.stats[0].receiving_yards > 0 || playerStats.stats[0].receiving_touchdowns > 0 || playerStats.stats[0].receptions > 0) && (
                       <div className="mb-4">
                         <h4 className="font-semibold text-white mb-2 border-b border-gray-600 pb-1">Receiving</h4>
                         <div className="space-y-1 text-sm">
+                          {playerStats.stats[0].receptions > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-300">Receptions: {playerStats.stats[0].receptions}</span>
+                              <span className="text-blue-400 font-medium">
+                                {(playerStats.stats[0].receptions * 1).toFixed(2)} pts
+                              </span>
+                            </div>
+                          )}
                           {playerStats.stats[0].receiving_yards > 0 && (
                             <div className="flex justify-between">
                               <span className="text-gray-300">Receiving Yards: {playerStats.stats[0].receiving_yards}</span>

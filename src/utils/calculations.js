@@ -1,6 +1,26 @@
 // Utility functions for fantasy football calculations
 
 /**
+ * Calculate points allowed score for D/ST
+ * @param {number} pointsAllowed - Points allowed by defense
+ * @param {Object} scoringRules - League scoring rules
+ * @returns {number} Fantasy points for points allowed
+ */
+const getPointsAllowedScore = (pointsAllowed, scoringRules) => {
+  const pointsAllowedRules = scoringRules.pointsAllowed || [10, 7, 4, 1, 0, -1, -4, -7, -10];
+  
+  if (pointsAllowed === 0) return pointsAllowedRules[0];
+  else if (pointsAllowed <= 6) return pointsAllowedRules[1];
+  else if (pointsAllowed <= 13) return pointsAllowedRules[2];
+  else if (pointsAllowed <= 17) return pointsAllowedRules[3];
+  else if (pointsAllowed <= 21) return pointsAllowedRules[4];
+  else if (pointsAllowed <= 27) return pointsAllowedRules[5];
+  else if (pointsAllowed <= 34) return pointsAllowedRules[6];
+  else if (pointsAllowed <= 45) return pointsAllowedRules[7];
+  else return pointsAllowedRules[8];
+};
+
+/**
  * Calculate fantasy points for a player based on their stats and scoring rules
  * @param {Object} player - Player object with stats
  * @param {Object} scoringRules - League scoring rules
@@ -8,6 +28,7 @@
  */
 export const calculatePlayerScore = (player, scoringRules) => {
   const stats = player.stats || {};
+  const position = player.position;
   
   // Debug for Saquon Barkley
   if (player.name && player.name.toLowerCase().includes('saquon')) {
@@ -19,17 +40,58 @@ export const calculatePlayerScore = (player, scoringRules) => {
     console.log('  receptions:', stats.receptions, '× 1 =', (stats.receptions || 0) * 1);
   }
   
-  return (
-    (stats.passingYards || 0) * (scoringRules.passingYards || 0) +
-    (stats.passingTD || 0) * (scoringRules.passingTD || 0) +
-    (stats.interceptions || 0) * (scoringRules.interceptions || 0) +
-    (stats.rushingYards || 0) * (scoringRules.rushingYards || 0) +
-    (stats.rushingTD || 0) * (scoringRules.rushingTD || 0) +
-    (stats.receivingYards || 0) * (scoringRules.receivingYards || 0) +
-    (stats.receivingTD || 0) * (scoringRules.receivingTD || 0) +
-    (stats.receptions || 0) * 1 + // 1 point per reception
-    (stats.fumbles || 0) * (scoringRules.fumbles || 0)
-  );
+  // Debug for kickers
+  if (position === 'K' || position === 'PK') {
+    console.log('🦵 KICKER CALCULATION DEBUG:');
+    console.log('  Player:', player.name, 'Position:', position);
+    console.log('  Player stats:', stats);
+    console.log('  Stats keys:', Object.keys(stats));
+    console.log('  fieldGoals0_39:', stats.fieldGoals0_39, '× 3 =', (stats.fieldGoals0_39 || 0) * 3);
+    console.log('  fieldGoals40_49:', stats.fieldGoals40_49, '× 4 =', (stats.fieldGoals40_49 || 0) * 4);
+    console.log('  fieldGoals50_plus:', stats.fieldGoals50_plus, '× 5 =', (stats.fieldGoals50_plus || 0) * 5);
+    console.log('  extraPointsMade:', stats.extraPointsMade, '×', (scoringRules.extraPointsMade || 1), '=', (stats.extraPointsMade || 0) * (scoringRules.extraPointsMade || 1));
+    console.log('  All stat values:', Object.entries(stats).filter(([key, value]) => value > 0));
+  }
+  
+  let totalScore = 0;
+  
+  // Offensive stats (for all offensive players)
+  totalScore += (stats.passingYards || 0) * (scoringRules.passingYards || 0);
+  totalScore += (stats.passingTD || 0) * (scoringRules.passingTD || 0);
+  totalScore += (stats.interceptions || 0) * (scoringRules.interceptions || 0);
+  totalScore += (stats.rushingYards || 0) * (scoringRules.rushingYards || 0);
+  totalScore += (stats.rushingTD || 0) * (scoringRules.rushingTD || 0);
+  totalScore += (stats.receivingYards || 0) * (scoringRules.receivingYards || 0);
+  totalScore += (stats.receivingTD || 0) * (scoringRules.receivingTD || 0);
+  totalScore += (stats.receptions || 0) * 1; // 1 point per reception
+  totalScore += (stats.fumbles || 0) * (scoringRules.fumbles || 0);
+  
+  // Kicker stats (only for kickers)
+  if (position === 'K' || position === 'PK') {
+    // Use individual field goal distance categories for proper scoring
+    totalScore += (stats.fieldGoals0_39 || 0) * 3;  // 0-39 yard field goals = 3 points
+    totalScore += (stats.fieldGoals40_49 || 0) * 4; // 40-49 yard field goals = 4 points  
+    totalScore += (stats.fieldGoals50_plus || 0) * 5; // 50+ yard field goals = 5 points
+    totalScore += (stats.extraPointsMade || 0) * (scoringRules.extraPointsMade || 1);
+    totalScore += (stats.fieldGoalsMissed || 0) * (scoringRules.fieldGoalsMissed || -1);
+  }
+  
+  // Defense stats (only for D/ST)
+  if (position === 'D/ST' || position === 'DEF') {
+    totalScore += (stats.sacks || 0) * (scoringRules.sacks || 1);
+    totalScore += (stats.interceptions || 0) * (scoringRules.interceptions || 2);
+    totalScore += (stats.fumbleRecoveries || 0) * (scoringRules.fumbleRecoveries || 1);
+    totalScore += (stats.safeties || 0) * (scoringRules.safeties || 2);
+    totalScore += (stats.blockedKicks || 0) * (scoringRules.blockedKicks || 2);
+    totalScore += (stats.puntReturnTD || 0) * (scoringRules.puntReturnTD || 6);
+    totalScore += (stats.kickoffReturnTD || 0) * (scoringRules.kickoffReturnTD || 6);
+    // Points allowed scoring (for D/ST)
+    if (stats.pointsAllowed !== undefined) {
+      totalScore += getPointsAllowedScore(stats.pointsAllowed, scoringRules);
+    }
+  }
+  
+  return totalScore;
 };
 
 /**
