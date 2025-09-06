@@ -327,6 +327,10 @@ export function DataProvider({ children }) {
                     // The stats are already in camelCase format, so use them directly
                     const rawStats = realPlayer.weeklyStats[week];
                     console.log('🔍 Raw stats (already camelCase):', rawStats);
+                    console.log('🔍 Raw stats keys:', Object.keys(rawStats));
+                    console.log('🔍 Raw receptions value:', rawStats.receptions);
+                    console.log('🔍 Raw receptions type:', typeof rawStats.receptions);
+                    console.log('🔍 All raw stats values:', rawStats);
                     
                     const transformedStats = {
                         passingYards: rawStats.passingYards || 0,

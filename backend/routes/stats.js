@@ -1050,6 +1050,7 @@ router.get('/scoring-ready/:week', async (req, res) => {
           rushingTD: stat.rushing_touchdowns || 0,
           receivingYards: stat.receiving_yards || 0,
           receivingTD: stat.receiving_touchdowns || 0,
+          receptions: stat.receptions || 0,
           fumbles: stat.fumbles_lost || 0,
           
           // Kicker stats
@@ -1075,6 +1076,7 @@ router.get('/scoring-ready/:week', async (req, res) => {
             rushing_touchdowns: stat.rushing_touchdowns,
             receiving_yards: stat.receiving_yards,
             receiving_touchdowns: stat.receiving_touchdowns,
+            receptions: stat.receptions,
             fumbles_lost: stat.fumbles_lost,
             sacks: stat.sacks,
             interceptions_defense: stat.interceptions_defense,
