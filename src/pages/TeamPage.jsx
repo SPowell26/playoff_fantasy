@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useYearly } from '../context/YearlyContext';
@@ -122,6 +122,7 @@ const TeamPage = () => {
             console.error('❌ Failed to fetch team roster:', error);
         }
     };
+
 
     if (loading) {
         return <div className="mb-4">Loading team data...</div>;
@@ -324,12 +325,46 @@ const TeamPage = () => {
     // Use modular team score calculation (same logic as LeaguePage)
     const teamScoreData = calculateTeamScoreWithStats(team, league, getPlayerWithRealStats, currentWeek);
     const teamTotal = teamScoreData.weeklyScore;
-    const grouped = {};
-    teamWithRealStats.players.forEach(player => {
-        if (!grouped[player.position]) grouped[player.position] = [];
-        grouped[player.position].push(player);
+    
+    // Calculate best ball lineup (simple version)
+    const playersWithScores = teamWithRealStats.players.map(player => ({
+        ...player,
+        calculatedScore: calculatePlayerScore(player, scoringRules)
+    })).sort((a, b) => b.calculatedScore - a.calculatedScore);
+
+    // Build optimal lineup
+    const optimalLineup = {
+        QB: playersWithScores.find(p => p.position === 'QB') || null,
+        RB1: playersWithScores.filter(p => p.position === 'RB')[0] || null,
+        RB2: playersWithScores.filter(p => p.position === 'RB')[1] || null,
+        WR1: playersWithScores.filter(p => p.position === 'WR')[0] || null,
+        WR2: playersWithScores.filter(p => p.position === 'WR')[1] || null,
+        TE: playersWithScores.find(p => p.position === 'TE') || null,
+        K: playersWithScores.find(p => p.position === 'K' || p.position === 'PK') || null,
+        DEF: playersWithScores.find(p => p.position === 'D/ST' || p.position === 'DEF') || null,
+        FLEX: null
+    };
+
+    // Find FLEX player (best remaining RB/WR/TE not already in lineup)
+    const usedPlayerIds = new Set();
+    Object.values(optimalLineup).forEach(player => {
+        if (player) usedPlayerIds.add(player.player_id || player.id);
     });
-    console.log("grouped players with real stats:", grouped);
+
+    const flexCandidates = playersWithScores.filter(player => 
+        !usedPlayerIds.has(player.player_id || player.id) && 
+        ['RB', 'WR', 'TE'].includes(player.position)
+    );
+    optimalLineup.FLEX = flexCandidates[0] || null;
+
+    // Update used player IDs for bench calculation
+    if (optimalLineup.FLEX) usedPlayerIds.add(optimalLineup.FLEX.player_id || optimalLineup.FLEX.id);
+
+    // Bench players are everyone else
+    const benchPlayers = playersWithScores.filter(player => 
+        !usedPlayerIds.has(player.player_id || player.id)
+    );
+    
     
     // Debug kicker positions specifically
     const kickers = teamWithRealStats.players.filter(p => p.position === 'K' || p.position === 'PK');
@@ -349,24 +384,27 @@ const TeamPage = () => {
         return colors[position] || 'bg-gray-100 border-gray-300 text-gray-800';
     };
 
-    const getRosterSpotPlayer = (grouped, position, index) => {
-        const playersAtPosition = grouped[position] || [];
-        if (playersAtPosition.length > index) {
-            return playersAtPosition[index];
+    const getRosterSpotPlayer = (position, index) => {
+        if (position === 'QB') return optimalLineup.QB;
+        if (position === 'RB') {
+            if (index === 0) return optimalLineup.RB1;
+            if (index === 1) return optimalLineup.RB2;
         }
+        if (position === 'WR') {
+            if (index === 0) return optimalLineup.WR1;
+            if (index === 1) return optimalLineup.WR2;
+        }
+        if (position === 'TE') return optimalLineup.TE;
+        if (position === 'K') return optimalLineup.K;
+        if (position === 'D/ST' || position === 'DEF') return optimalLineup.DEF;
         return null;
     };
 
-    const getFlexPlayer = (grouped) => {
-        const flexPlayers = grouped['FLEX'] || [];
-        if (flexPlayers.length > 0) {
-            return flexPlayers[0];
-        }
-        return null;
+    const getFlexPlayer = () => {
+        return optimalLineup.FLEX;
     };
 
-    const getBenchPlayer = (grouped, index) => {
-        const benchPlayers = grouped['BN'] || [];
+    const getBenchPlayer = (index) => {
         if (benchPlayers.length > index) {
             return benchPlayers[index];
         }
@@ -508,8 +546,8 @@ const TeamPage = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-blue-900/50 border border-blue-600 text-blue-300">QB</div>
-                                        {getRosterSpotPlayer(grouped, 'QB', 0) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer(grouped, 'QB', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                        {getRosterSpotPlayer('QB', 0) ? (
+                                            <RosterPlayer player={getRosterSpotPlayer('QB', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -522,8 +560,8 @@ const TeamPage = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-green-900/50 border border-green-600 text-green-300">RB</div>
-                                        {getRosterSpotPlayer(grouped, 'RB', 0) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer(grouped, 'RB', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                        {getRosterSpotPlayer('RB', 0) ? (
+                                            <RosterPlayer player={getRosterSpotPlayer('RB', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -536,8 +574,8 @@ const TeamPage = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-green-900/50 border border-green-600 text-green-300">RB</div>
-                                        {getRosterSpotPlayer(grouped, 'RB', 1) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer(grouped, 'RB', 1)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                        {getRosterSpotPlayer('RB', 1) ? (
+                                            <RosterPlayer player={getRosterSpotPlayer('RB', 1)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -550,8 +588,8 @@ const TeamPage = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-purple-900/50 border border-purple-600 text-purple-300">WR</div>
-                                        {getRosterSpotPlayer(grouped, 'WR', 0) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer(grouped, 'WR', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                        {getRosterSpotPlayer('WR', 0) ? (
+                                            <RosterPlayer player={getRosterSpotPlayer('WR', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -564,8 +602,8 @@ const TeamPage = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-purple-900/50 border border-purple-600 text-purple-300">WR</div>
-                                        {getRosterSpotPlayer(grouped, 'WR', 1) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer(grouped, 'WR', 1)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                        {getRosterSpotPlayer('WR', 1) ? (
+                                            <RosterPlayer player={getRosterSpotPlayer('WR', 1)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -578,8 +616,8 @@ const TeamPage = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-orange-900/50 border border-orange-600 text-orange-300">TE</div>
-                                        {getRosterSpotPlayer(grouped, 'TE', 0) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer(grouped, 'TE', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                        {getRosterSpotPlayer('TE', 0) ? (
+                                            <RosterPlayer player={getRosterSpotPlayer('TE', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -592,8 +630,8 @@ const TeamPage = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-indigo-900/50 border border-indigo-600 text-indigo-300">FLEX</div>
-                                        {getFlexPlayer(grouped) ? (
-                                            <RosterPlayer player={getFlexPlayer(grouped)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                        {getFlexPlayer() ? (
+                                            <RosterPlayer player={getFlexPlayer()} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -606,8 +644,8 @@ const TeamPage = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-900/50 border border-yellow-600 text-yellow-300">K</div>
-                                        {getRosterSpotPlayer(grouped, 'K', 0) || getRosterSpotPlayer(grouped, 'PK', 0) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer(grouped, 'K', 0) || getRosterSpotPlayer(grouped, 'PK', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                        {getRosterSpotPlayer('K', 0) ? (
+                                            <RosterPlayer player={getRosterSpotPlayer('K', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -620,8 +658,8 @@ const TeamPage = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-red-900/50 border border-red-600 text-red-300">D/ST</div>
-                                        {getRosterSpotPlayer(grouped, 'D/ST', 0) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer(grouped, 'D/ST', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                        {getRosterSpotPlayer('D/ST', 0) ? (
+                                            <RosterPlayer player={getRosterSpotPlayer('D/ST', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -642,8 +680,8 @@ const TeamPage = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-gray-700 border border-gray-500 text-gray-300">BN</div>
-                                        {getBenchPlayer(grouped, 0) ? (
-                                            <RosterPlayer player={getBenchPlayer(grouped, 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                        {getBenchPlayer(0) ? (
+                                            <RosterPlayer player={getBenchPlayer(0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -656,8 +694,8 @@ const TeamPage = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-gray-700 border border-gray-500 text-gray-300">BN</div>
-                                        {getBenchPlayer(grouped, 1) ? (
-                                            <RosterPlayer player={getBenchPlayer(grouped, 1)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                        {getBenchPlayer(1) ? (
+                                            <RosterPlayer player={getBenchPlayer(1)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -704,16 +742,16 @@ const TeamPage = () => {
                         <div className="space-y-3">
                             <div className="flex justify-between items-center">
                                 <span className="text-gray-300">Players Added:</span>
-                                <span className="text-white font-medium">{Object.values(grouped).flat().length}</span>
+                                <span className="text-white font-medium">{teamWithRealStats.players.length}</span>
                             </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-gray-300">Spots Remaining:</span>
-                                <span className="text-white font-medium">{10 - Object.values(grouped).flat().length}</span>
+                                <span className="text-white font-medium">{12 - teamWithRealStats.players.length}</span>
                             </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-gray-300">Complete Roster:</span>
-                                <span className={`font-medium ${Object.values(grouped).flat().length === 10 ? 'text-green-400' : 'text-yellow-400'}`}>
-                                    {Object.values(grouped).flat().length === 10 ? 'Yes' : 'No'}
+                                <span className={`font-medium ${teamWithRealStats.players.length === 12 ? 'text-green-400' : 'text-yellow-400'}`}>
+                                    {teamWithRealStats.players.length === 12 ? 'Yes' : 'No'}
                                 </span>
                             </div>
                         </div>
