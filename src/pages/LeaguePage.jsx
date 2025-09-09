@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
+import { useYearly } from '../context/YearlyContext';
 import CreateTeamForm from '../components/CreateTeamForm';
+import LeagueStandings from '../components/LeagueStandings';
 
 const LeaguePage = () => {
   const { leagueId } = useParams();
   const navigate = useNavigate();
-  const { leagues, createTeam, addTeamToLeague } = useData();
+  const { leagues, createTeam, addTeamToLeague, fetchRealStats } = useData();
+  const { currentWeek, nflSeasonYear } = useYearly();
   
   // State for spam modal
   const [spamLoading, setSpamLoading] = useState(false);
@@ -47,7 +50,26 @@ const LeaguePage = () => {
       
       const teamsData = await response.json();
       console.log('✅ Fetched teams:', teamsData);
-      setTeams(teamsData);
+      
+      // Fetch rosters for each team
+      const teamsWithRosters = await Promise.all(
+        teamsData.map(async (team) => {
+          try {
+            const rosterResponse = await fetch(`http://localhost:3001/api/teams/${team.id}/players`);
+            if (rosterResponse.ok) {
+              const rosterData = await rosterResponse.json();
+              return { ...team, players: rosterData };
+            }
+            return { ...team, players: [] };
+          } catch (error) {
+            console.error(`❌ Failed to fetch roster for team ${team.id}:`, error);
+            return { ...team, players: [] };
+          }
+        })
+      );
+      
+      console.log('✅ Fetched teams with rosters:', teamsWithRosters);
+      setTeams(teamsWithRosters);
       
     } catch (error) {
       console.error('❌ Failed to fetch teams:', error);
@@ -75,6 +97,14 @@ const LeaguePage = () => {
     console.log('✅ League found, fetching teams');
     fetchTeams();
   }, [league, leagueId, navigate, leagues.length]);
+
+  // Fetch real stats when currentWeek and nflSeasonYear are available
+  useEffect(() => {
+    if (currentWeek && nflSeasonYear && league) {
+      console.log('🔄 Fetching real stats for league page:', { currentWeek, nflSeasonYear, league: league.name });
+      fetchRealStats(currentWeek, nflSeasonYear);
+    }
+  }, [currentWeek, nflSeasonYear, league?.id]);
 
   const handleSpamMembers = async () => {
     // Set default message if empty
@@ -166,32 +196,19 @@ const LeaguePage = () => {
         </div>
       </div>
 
-      {/* Teams Grid */}
-      <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
-        <h2 className="text-xl font-semibold text-white mb-6 text-center">Teams ({teams.length})</h2>
-        {teamsLoading ? (
-          <p className="text-gray-300 text-center">Loading teams...</p>
-        ) : teams.length === 0 ? (
-          <p className="text-gray-400 text-center">No teams yet. Create your first team above!</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {teams.map(team => (
-              <div 
-                key={team.id} 
-                className="bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg p-6 cursor-pointer transition-all duration-200 hover:border-blue-500 hover:shadow-lg"
-                onClick={() => navigate(`/team/${team.id}`)}
-              >
-                <h3 className="text-lg font-semibold text-white mb-3">{team.name}</h3>
-                <p className="text-gray-300 mb-4">Owner: {team.owner}</p>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-sm">Players: {team.players?.length || 0}</span>
-                  <span className="text-blue-400 font-medium">Points: {team.total_points || 0}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* League Standings */}
+      {teamsLoading ? (
+        <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
+          <p className="text-gray-300 text-center">Loading standings...</p>
+        </div>
+      ) : (
+        <LeagueStandings 
+          teams={teams} 
+          league={league} 
+          currentWeek={currentWeek} 
+          currentYear={nflSeasonYear} 
+        />
+      )}
 
       {/* Spam Modal */}
       {showSpamModal && (

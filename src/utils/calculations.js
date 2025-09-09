@@ -111,6 +111,77 @@ export const calculateTeamScore = (team, scoringRules) => {
 };
 
 /**
+ * Calculate team score for starting lineup only (excludes bench players)
+ * Uses best-ball logic to pick highest-scoring players for each position
+ * @param {Object} team - Team object with players array
+ * @param {Object} scoringRules - Scoring rules object
+ * @returns {number} Total starting lineup score
+ */
+export const calculateStartingLineupScore = (team, scoringRules) => {
+  if (!team.players || !Array.isArray(team.players)) {
+    return 0;
+  }
+  
+  // Calculate scores for all players first
+  const playersWithScores = team.players.map(player => ({
+    ...player,
+    calculatedScore: calculatePlayerScore(player, scoringRules)
+  }));
+
+  // Sort players by score (descending) for best-ball logic
+  playersWithScores.sort((a, b) => b.calculatedScore - a.calculatedScore);
+
+  // Create a copy of players to work with
+  const availablePlayers = [...playersWithScores];
+  
+  // Define starting lineup requirements
+  const requirements = {
+    QB: 1,
+    RB: 2,
+    WR: 2,
+    TE: 1,
+    K: 1,
+    DEF: 1,
+    FLEX: 1
+  };
+
+  let startingLineupScore = 0;
+
+  // Fill positional spots first (highest scoring players at each position)
+  Object.keys(requirements).forEach(position => {
+    if (position === 'FLEX') return; // Handle FLEX separately
+    
+    // Handle position mapping for different position names
+    let eligiblePlayers;
+    if (position === 'DEF') {
+      eligiblePlayers = availablePlayers.filter(p => p.position === 'D/ST' || p.position === 'DEF');
+    } else if (position === 'K') {
+      eligiblePlayers = availablePlayers.filter(p => p.position === 'K' || p.position === 'PK');
+    } else {
+      eligiblePlayers = availablePlayers.filter(p => p.position === position);
+    }
+    
+    const sortedPlayers = eligiblePlayers.sort((a, b) => b.calculatedScore - a.calculatedScore);
+    
+    for (let i = 0; i < requirements[position] && i < sortedPlayers.length; i++) {
+      startingLineupScore += sortedPlayers[i].calculatedScore;
+      // Remove from available players
+      const index = availablePlayers.indexOf(sortedPlayers[i]);
+      if (index > -1) availablePlayers.splice(index, 1);
+    }
+  });
+
+  // Fill FLEX spot with highest scoring remaining RB/WR/TE
+  const flexEligible = availablePlayers.filter(p => ['RB', 'WR', 'TE'].includes(p.position));
+  if (flexEligible.length > 0) {
+    const bestFlex = flexEligible.sort((a, b) => b.calculatedScore - a.calculatedScore)[0];
+    startingLineupScore += bestFlex.calculatedScore;
+  }
+
+  return startingLineupScore;
+};
+
+/**
  * Sort teams by score (highest first)
  * @param {Array} teams - Array of team objects
  * @param {Object} scoringRules - League scoring rules

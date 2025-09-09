@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
-import { calculateTeamScore, calculatePlayerScore} from '../utils/calculations';
+import { calculateTeamScore, calculatePlayerScore, calculateStartingLineupScore} from '../utils/calculations';
+import { calculateTeamScoreWithStats } from '../utils/teamScoreUtils';
 import PlayerSelectionForm from '../components/PlayerSelectionForm';
 import PlayerStatsModal from '../components/PlayerStatsModal';
 
@@ -320,7 +321,9 @@ const TeamPage = () => {
     console.log('🔍 Original team.players:', team.players);
     console.log('🔍 teamWithRealStats.players:', teamWithRealStats.players);
     
-    const teamTotal = calculateTeamScore(teamWithRealStats, scoringRules);
+    // Use modular team score calculation (same logic as LeaguePage)
+    const teamScoreData = calculateTeamScoreWithStats(team, league, getPlayerWithRealStats, currentWeek);
+    const teamTotal = teamScoreData.weeklyScore;
     const grouped = {};
     teamWithRealStats.players.forEach(player => {
         if (!grouped[player.position]) grouped[player.position] = [];
