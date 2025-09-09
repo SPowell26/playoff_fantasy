@@ -9,7 +9,8 @@ export function YearlyProvider({children}) {
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
   
   // NFL Season year (the season that started in this calendar year)
-  const [nflSeasonYear, setNflSeasonYear] = useState(new Date().getFullYear());
+  // Default to 2025 for the 2025-26 season
+  const [nflSeasonYear, setNflSeasonYear] = useState(2025);
   
   const [currentWeek, setCurrentWeek] = useState(null);
   const [seasonType, setSeasonType] = useState(null);
@@ -38,7 +39,7 @@ export function YearlyProvider({children}) {
 
   // Helper function to get season display string
   const getSeasonDisplayString = (nflYear) => {
-    return `${nflYear}-${nflYear + 1}`;
+    return nflYear.toString();
   };
 
   // Fetch current week status from backend API
