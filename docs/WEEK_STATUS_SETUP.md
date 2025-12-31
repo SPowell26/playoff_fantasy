@@ -152,9 +152,9 @@ GET http://localhost:3001/api/status/debug
 ```
 
 ## Future Enhancements
-
+ld 
 - [ ] Add more reliable fallback APIs
 - [ ] Implement week validation logic
 - [ ] Add historical week data
-- [ ] Create week transition notifications
+- [ ] Create week transition notificationssho
 - [ ] Add commissioner override for week management
