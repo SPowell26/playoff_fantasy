@@ -1,11 +1,54 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calculateLeagueStandings } from '../utils/teamScoreUtils';
 import { useData } from '../context/DataContext';
+import { useYearly } from '../context/YearlyContext';
 
 const LeagueStandings = ({ teams, league, currentWeek, currentYear }) => {
   const navigate = useNavigate();
   const { getPlayerWithRealStats } = useData();
+  const { seasonType } = useYearly();
+  const [seasonTotals, setSeasonTotals] = useState([]);
+  const [seasonTotalsLoading, setSeasonTotalsLoading] = useState(false);
+
+  // Fetch season totals from backend
+  useEffect(() => {
+    if (!league?.id || !currentYear) {
+      console.log('⚠️ LeagueStandings: Missing league.id or currentYear', { leagueId: league?.id, currentYear });
+      return;
+    }
+
+    const fetchSeasonTotals = async () => {
+      try {
+        setSeasonTotalsLoading(true);
+        // Use 'regular' for regular season, fallback to seasonType from context
+        // Default to 'regular' if seasonType is null/undefined
+        const seasonTypeParam = seasonType || 'regular';
+        const url = `http://localhost:3001/api/stats/season-totals/${league.id}?year=${currentYear}&seasonType=${seasonTypeParam}`;
+        console.log('🔄 Fetching season totals:', url);
+        
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Season totals fetched:', data);
+          setSeasonTotals(data.seasonTotals || []);
+        } else {
+          console.error('❌ Failed to fetch season totals:', response.status);
+          const errorText = await response.text();
+          console.error('Error response:', errorText);
+        }
+      } catch (error) {
+        console.error('❌ Error fetching season totals:', error);
+        // Don't crash the component if API fails
+        setSeasonTotals([]);
+      } finally {
+        setSeasonTotalsLoading(false);
+      }
+    };
+
+    fetchSeasonTotals();
+  }, [league?.id, currentYear, seasonType]);
 
   // Calculate team scores and rankings using modular utility
   const teamStandings = useMemo(() => {
@@ -13,14 +56,46 @@ const LeagueStandings = ({ teams, league, currentWeek, currentYear }) => {
       teams: teams?.length || 0,
       currentWeek,
       currentYear,
-      league: league?.name
+      league: league?.name,
+      seasonTotalsCount: seasonTotals.length
     });
 
     if (!teams || teams.length === 0) return [];
 
-    // Use modular utility function (same logic as TeamPage)
-    return calculateLeagueStandings(teams, league, getPlayerWithRealStats, currentWeek);
-  }, [teams, league, currentWeek, currentYear, getPlayerWithRealStats]);
+    try {
+      // Calculate current week scores
+      const currentWeekStandings = calculateLeagueStandings(teams, league, getPlayerWithRealStats, currentWeek);
+
+      // Merge with season totals from backend
+      return currentWeekStandings.map(team => {
+        const seasonTotal = seasonTotals.find(st => st.team_id === team.id);
+        return {
+          ...team,
+          // Keep weekly score from calculation
+          weeklyScore: team.weeklyScore || 0,
+          // Use season total from backend if available, otherwise use weekly score
+          totalScore: seasonTotal?.season_total ? parseFloat(seasonTotal.season_total) : (team.totalScore || 0),
+          weeksPlayed: seasonTotal?.weeks_played || 0,
+          averageScore: seasonTotal?.average_weekly_score ? parseFloat(seasonTotal.average_weekly_score) : null,
+          bestWeek: seasonTotal?.best_weekly_score ? parseFloat(seasonTotal.best_weekly_score) : null,
+          worstWeek: seasonTotal?.worst_weekly_score ? parseFloat(seasonTotal.worst_weekly_score) : null
+        };
+      }).sort((a, b) => b.totalScore - a.totalScore) // Re-sort by season total
+        .map((team, index) => ({
+          ...team,
+          rank: index + 1 // Re-calculate rank based on season total
+        }));
+    } catch (error) {
+      console.error('❌ Error calculating team standings:', error);
+      // Return basic team list if calculation fails
+      return teams.map((team, index) => ({
+        ...team,
+        weeklyScore: 0,
+        totalScore: 0,
+        rank: index + 1
+      }));
+    }
+  }, [teams, league, currentWeek, currentYear, getPlayerWithRealStats, seasonTotals]);
 
   // Get medal emoji for top 3
   const getRankEmoji = (rank) => {
@@ -52,64 +127,76 @@ const LeagueStandings = ({ teams, league, currentWeek, currentYear }) => {
         League Standings - Week {currentWeek}
       </h2>
       
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-600">
-              <th className="text-left py-3 px-4 text-gray-300 font-medium">Rank</th>
-              <th className="text-left py-3 px-4 text-gray-300 font-medium">Team Name</th>
-              <th className="text-right py-3 px-4 text-gray-300 font-medium">Week {currentWeek}</th>
-              <th className="text-right py-3 px-4 text-gray-300 font-medium">Season Total</th>
-              <th className="text-center py-3 px-4 text-gray-300 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {teamStandings.map((team) => (
-              <tr 
-                key={team.id}
-                className="border-b border-gray-700 hover:bg-gray-750 transition-colors cursor-pointer"
-                onClick={() => handleTeamClick(team.id)}
-              >
-                <td className="py-4 px-4">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-lg">{getRankEmoji(team.rank)}</span>
-                    <span className="text-white font-medium">#{team.rank}</span>
-                  </div>
-                </td>
-                <td className="py-4 px-4">
-                  <div>
-                    <div className="text-white font-medium">{team.name}</div>
-                    <div className="text-gray-400 text-sm">Owner: {team.owner}</div>
-                  </div>
-                </td>
-                <td className="py-4 px-4 text-right">
-                  <span className="text-blue-400 font-semibold text-lg">
-                    {team.weeklyScore > 0 ? team.weeklyScore.toFixed(1) : '0.0'}
-                  </span>
-                  <div className="text-xs text-gray-400">pts</div>
-                </td>
-                <td className="py-4 px-4 text-right">
-                  <span className="text-green-400 font-semibold text-lg">
-                    {team.totalScore > 0 ? team.totalScore.toFixed(1) : '0.0'}
-                  </span>
-                  <div className="text-xs text-gray-400">pts</div>
-                </td>
-                <td className="py-4 px-4 text-center">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleTeamClick(team.id);
-                    }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
-                  >
-                    View Details
-                  </button>
-                </td>
+      {seasonTotalsLoading ? (
+        <div className="text-center py-8">
+          <p className="text-gray-400">Loading season totals...</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-600">
+                <th className="text-left py-3 px-4 text-gray-300 font-medium">Rank</th>
+                <th className="text-left py-3 px-4 text-gray-300 font-medium">Team Name</th>
+                <th className="text-right py-3 px-4 text-gray-300 font-medium">Week {currentWeek}</th>
+                <th className="text-right py-3 px-4 text-gray-300 font-medium">Season Total</th>
+                <th className="text-center py-3 px-4 text-gray-300 font-medium">Weeks</th>
+                <th className="text-center py-3 px-4 text-gray-300 font-medium">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {teamStandings.map((team) => (
+                <tr 
+                  key={team.id}
+                  className="border-b border-gray-700 hover:bg-gray-750 transition-colors cursor-pointer"
+                  onClick={() => handleTeamClick(team.id)}
+                >
+                  <td className="py-4 px-4">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-lg">{getRankEmoji(team.rank)}</span>
+                      <span className="text-white font-medium">#{team.rank}</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-4">
+                    <div>
+                      <div className="text-white font-medium">{team.name}</div>
+                      <div className="text-gray-400 text-sm">Owner: {team.owner}</div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-4 text-right">
+                    <span className="text-blue-400 font-semibold text-lg">
+                      {team.weeklyScore > 0 ? team.weeklyScore.toFixed(1) : '0.0'}
+                    </span>
+                    <div className="text-xs text-gray-400">pts</div>
+                  </td>
+                  <td className="py-4 px-4 text-right">
+                    <span className="text-green-400 font-semibold text-lg">
+                      {team.totalScore > 0 ? team.totalScore.toFixed(1) : '0.0'}
+                    </span>
+                    <div className="text-xs text-gray-400">
+                      {team.averageScore ? `Avg: ${team.averageScore.toFixed(1)}` : 'pts'}
+                    </div>
+                  </td>
+                  <td className="py-4 px-4 text-center">
+                    <span className="text-gray-300">{team.weeksPlayed || 0}</span>
+                  </td>
+                  <td className="py-4 px-4 text-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleTeamClick(team.id);
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+                    >
+                      View Details
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };

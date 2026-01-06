@@ -39,6 +39,7 @@ export async function calculateLeagueWeeklyScores(db, leagueId, week, year, seas
         console.log(`  📊 Processing team: ${team.name} (${team.owner})`);
         
         // Get team roster with player stats for this week
+        // Try to match season_type, but also allow stats without season_type or with different season_type
         const rosterResult = await db.query(`
           SELECT 
             tr.roster_position,
@@ -51,24 +52,57 @@ export async function calculateLeagueWeeklyScores(db, leagueId, week, year, seas
           JOIN players p ON tr.player_id = p.id
           LEFT JOIN player_stats ps ON p.id = ps.player_id 
             AND ps.week = $1 
-            AND ps.year = $2 
-            AND ps.season_type = $3
+            AND ps.year = $2
+            AND (ps.season_type = $3 OR (ps.season_type IS NULL AND $3 = 'regular'))
           WHERE tr.team_id = $4
+            AND tr.league_id = $5
           ORDER BY tr.roster_position, p.position, p.name
-        `, [week, year, seasonType, team.id]);
+        `, [week, year, seasonType, team.id, leagueId]);
         
         if (rosterResult.rows.length === 0) {
           console.log(`    ⚠️ No roster found for team ${team.name}`);
+          
+          // Debug: Check if roster exists without stats
+          const rosterCheck = await db.query(`
+            SELECT COUNT(*) as roster_count 
+            FROM team_rosters 
+            WHERE team_id = $1 AND league_id = $2
+          `, [team.id, leagueId]);
+          console.log(`    🔍 Debug: Team has ${rosterCheck.rows[0].roster_count} players on roster`);
+          
           continue;
         }
         
+        // Debug: Count how many players have stats
+        const playersWithStats = rosterResult.rows.filter(row => row.id !== null).length;
+        console.log(`    📊 Found ${rosterResult.rows.length} roster players, ${playersWithStats} have stats for Week ${week}`);
+        
         // Prepare players data for Best Ball calculation
-        const teamPlayers = rosterResult.rows.map(row => ({
-          id: row.player_id,
-          name: row.player_name,
-          position: row.position,
-          nflTeam: row.nfl_team,
-          rosterPosition: row.roster_position,
+        // Filter out players with positions that don't have scoring rules
+        const validPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+        
+        const teamPlayers = rosterResult.rows
+          .filter(row => {
+            // Normalize position and check if valid
+            let position = row.position;
+            if (position === 'D/ST' || position === 'DST' || position === 'DEF') {
+              position = 'DEF';
+            }
+            return validPositions.includes(position);
+          })
+          .map(row => {
+            // Normalize position: D/ST -> DEF
+            let position = row.position;
+            if (position === 'D/ST' || position === 'DST' || position === 'DEF') {
+              position = 'DEF';
+            }
+            
+            return {
+            id: row.player_id,
+            name: row.player_name,
+            position: position,
+            nflTeam: row.nfl_team,
+            rosterPosition: row.roster_position,
           stats: {
             // Offensive stats
             passing_yards: row.passing_yards || 0,
@@ -97,7 +131,13 @@ export async function calculateLeagueWeeklyScores(db, leagueId, week, year, seas
             field_goals_50_plus: row.field_goals_50_plus || 0,
             extra_points: row.extra_points || 0
           }
-        }));
+        };
+        });
+        
+        if (teamPlayers.length === 0) {
+          console.log(`    ⚠️ No valid players found for team ${team.name} (all players have invalid positions)`);
+          continue;
+        }
         
         // Calculate Best Ball weekly score
         const bestBallResult = calculateBestBallWeeklyScore(teamPlayers);
@@ -106,7 +146,8 @@ export async function calculateLeagueWeeklyScores(db, leagueId, week, year, seas
         console.log(`    📋 Optimal lineup: QB: ${bestBallResult.optimalLineup.QB?.playerName || 'None'} (${bestBallResult.optimalLineup.QB?.fantasyPoints || 0}), RB1: ${bestBallResult.optimalLineup.RB1?.playerName || 'None'} (${bestBallResult.optimalLineup.RB1?.fantasyPoints || 0})`);
         
         // Store weekly score in database
-        await db.query(`
+        try {
+          const insertResult = await db.query(`
           INSERT INTO team_weekly_scores (
             league_id, team_id, week, year, season_type,
             qb_player_id, qb_fantasy_points,
@@ -117,7 +158,7 @@ export async function calculateLeagueWeeklyScores(db, leagueId, week, year, seas
             k_player_id, k_fantasy_points,
             def_player_id, def_fantasy_points,
             weekly_score, lineup_json, source
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
           ON CONFLICT (league_id, team_id, week, year, season_type) DO UPDATE SET
             qb_player_id = EXCLUDED.qb_player_id,
             qb_fantasy_points = EXCLUDED.qb_fantasy_points,
@@ -166,7 +207,13 @@ export async function calculateLeagueWeeklyScores(db, leagueId, week, year, seas
           'best_ball_engine'
         ]);
         
+        console.log(`    💾 Score stored successfully (rowCount: ${insertResult.rowCount})`);
         scoresCalculated++;
+        
+        } catch (insertError) {
+          console.error(`    ❌ Error storing score in database:`, insertError);
+          throw insertError; // Re-throw to be caught by outer try-catch
+        }
         
       } catch (teamError) {
         console.error(`    ❌ Error processing team ${team.name}:`, teamError.message);

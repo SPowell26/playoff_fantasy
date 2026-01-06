@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useYearly } from '../context/YearlyContext';
@@ -22,7 +22,9 @@ const TeamPage = () => {
     const [selectedPlayerForStats, setSelectedPlayerForStats] = useState(null);
     const [showPlayerStatsModal, setShowPlayerStatsModal] = useState(false);
     const { fetchRealStats, getPlayerWithRealStats } = useData();
-    const { nflSeasonYear, seasonDisplay } = useYearly();
+    const { nflSeasonYear, seasonDisplay, seasonType } = useYearly();
+    const [teamSeasonStats, setTeamSeasonStats] = useState(null);
+    const [teamRank, setTeamRank] = useState(null);
 
     // Fetch team and league data on component mount
     useEffect(() => {
@@ -54,6 +56,37 @@ const TeamPage = () => {
             fetchRealStats(currentWeek, nflSeasonYear);
         }
     }, [currentWeek, nflSeasonYear]);
+
+    // Fetch season totals for this team
+    const fetchTeamSeasonStats = useCallback(async () => {
+        if (!league?.id || !nflSeasonYear || !team?.id) return;
+        
+        try {
+            const seasonTypeParam = seasonType || 'regular';
+            const response = await fetch(
+                `http://localhost:3001/api/stats/season-totals/${league.id}?year=${nflSeasonYear}&seasonType=${seasonTypeParam}`
+            );
+            
+            if (response.ok) {
+                const data = await response.json();
+                const teamStats = data.seasonTotals?.find(st => st.team_id === team.id);
+                console.log('✅ Team season stats:', teamStats);
+                setTeamSeasonStats(teamStats);
+                
+                // Calculate rank - season totals are already sorted by total DESC
+                if (data.seasonTotals && teamStats) {
+                    const rank = data.seasonTotals.findIndex(st => st.team_id === team.id) + 1;
+                    setTeamRank(rank || null);
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error fetching team season stats:', error);
+        }
+    }, [league?.id, nflSeasonYear, team?.id, seasonType]);
+
+    useEffect(() => {
+        fetchTeamSeasonStats();
+    }, [fetchTeamSeasonStats]);
 
     const fetchAvailableWeeks = async () => {
         try {
@@ -723,16 +756,32 @@ const TeamPage = () => {
                         <div className="space-y-3">
                             <div className="flex justify-between items-center">
                                 <span className="text-gray-300">Current Rank:</span>
-                                <span className="text-white font-medium">TBD</span>
+                                <span className="text-white font-medium">
+                                    {teamRank ? `#${teamRank}` : '—'}
+                                </span>
                             </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-gray-300">Season Total:</span>
-                                <span className="text-white font-medium">TBD</span>
+                                <span className="text-white font-medium">
+                                    {teamSeasonStats?.season_total 
+                                        ? parseFloat(teamSeasonStats.season_total).toFixed(1) 
+                                        : '0.0'}
+                                </span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className="text-gray-300">Games Played:</span>
-                                <span className="text-white font-medium">TBD</span>
+                                <span className="text-gray-300">Weeks Played:</span>
+                                <span className="text-white font-medium">
+                                    {teamSeasonStats?.weeks_played || '0'}
+                                </span>
                             </div>
+                            {teamSeasonStats?.average_weekly_score && (
+                                <div className="flex justify-between items-center">
+                                    <span className="text-gray-300">Avg Score:</span>
+                                    <span className="text-white font-medium">
+                                        {parseFloat(teamSeasonStats.average_weekly_score).toFixed(1)}
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
 

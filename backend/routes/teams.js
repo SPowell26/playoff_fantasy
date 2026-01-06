@@ -1,5 +1,45 @@
 import express from 'express';
+import { calculateLeagueWeeklyScores } from '../services/best-ball-scoring-service.js';
 const router = express.Router();
+
+/**
+ * Recalculate all weekly scores for a league when roster changes
+ * This ensures season totals reflect the current roster composition
+ */
+async function recalculateLeagueScores(db, leagueId, year = 2025, seasonType = 'regular') {
+  try {
+    console.log(`🔄 Recalculating weekly scores for league ${leagueId} due to roster change...`);
+    
+    // Get all available weeks for this year
+    const weeksResult = await db.query(
+      `SELECT DISTINCT week FROM player_stats WHERE year = $1 ORDER BY week`,
+      [year]
+    );
+    
+    if (weeksResult.rows.length === 0) {
+      console.log(`  ⚠️ No weeks found for year ${year}`);
+      return;
+    }
+    
+    const weeks = weeksResult.rows.map(row => row.week);
+    console.log(`  📅 Found ${weeks.length} weeks to recalculate: ${weeks.join(', ')}`);
+    
+    // Recalculate scores for each week
+    for (const week of weeks) {
+      try {
+        await calculateLeagueWeeklyScores(db, leagueId, week, year, seasonType);
+        console.log(`  ✅ Week ${week} recalculated`);
+      } catch (error) {
+        console.error(`  ❌ Error recalculating Week ${week}:`, error.message);
+      }
+    }
+    
+    console.log(`✅ League ${leagueId} weekly scores recalculated`);
+  } catch (error) {
+    console.error(`❌ Error recalculating league scores:`, error);
+    // Don't throw - this is a background operation
+  }
+}
 
 // POST add player to a team
 router.post('/:teamId/players', async (req, res) => {
@@ -15,9 +55,9 @@ router.post('/:teamId/players', async (req, res) => {
     
     const db = req.app.locals.db;
     
-    // Get the team and its league
+    // Get the team and its league (with year)
     const teamResult = await db.query(
-      'SELECT t.*, l.id as league_id FROM teams t JOIN leagues l ON t.league_id = l.id WHERE t.id = $1',
+      'SELECT t.*, l.id as league_id, l.year as league_year FROM teams t JOIN leagues l ON t.league_id = l.id WHERE t.id = $1',
       [teamId]
     );
     
@@ -52,6 +92,11 @@ router.post('/:teamId/players', async (req, res) => {
     
     // Get player details to return
     const playerResult = await db.query('SELECT * FROM players WHERE id = $1', [player_id]);
+    
+    // Recalculate all weekly scores for this league (background task, don't wait)
+    recalculateLeagueScores(db, team.league_id, team.league_year || 2025, 'regular').catch(err => {
+      console.error('Error in background score recalculation:', err);
+    });
     
     res.status(201).json({
       roster: rosterResult.rows[0],
@@ -123,6 +168,20 @@ router.delete('/:teamId/players/:playerId', async (req, res) => {
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Player not found on this team' });
+    }
+    
+    // Get the team and its league for recalculation
+    const teamResult = await db.query(
+      'SELECT t.*, l.id as league_id, l.year as league_year FROM teams t JOIN leagues l ON t.league_id = l.id WHERE t.id = $1',
+      [teamId]
+    );
+    
+    if (teamResult.rows.length > 0) {
+      const team = teamResult.rows[0];
+      // Recalculate all weekly scores for this league (background task, don't wait)
+      recalculateLeagueScores(db, team.league_id, team.league_year || 2025, 'regular').catch(err => {
+        console.error('Error in background score recalculation:', err);
+      });
     }
     
     console.log('✅ Player removed from team');

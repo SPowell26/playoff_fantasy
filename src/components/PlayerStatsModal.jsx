@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useYearly } from '../context/YearlyContext';
 
-const PlayerStatsModal = ({ player, isOpen, onClose }) => {
+const PlayerStatsModal = ({ player, isOpen, onClose, week, year }) => {
   const [playerStats, setPlayerStats] = useState(null);
   const [loading, setLoading] = useState(false);
   
-  // Get current week/season from context instead of props
-  const { currentWeek, nflSeasonYear, seasonDisplay, seasonType, isPlayoffs } = useYearly();
+  // Use provided week/year or fall back to context
+  const { currentWeek: contextWeek, nflSeasonYear: contextYear, seasonDisplay, seasonType, isPlayoffs } = useYearly();
+  const currentWeek = week || contextWeek;
+  const nflSeasonYear = year || contextYear;
 
   // Helper function to get points allowed score and range description
   const getPointsAllowedInfo = (pointsAllowed) => {
@@ -77,31 +79,38 @@ const PlayerStatsModal = ({ player, isOpen, onClose }) => {
     return total;
   };
 
-  // Fetch player stats when modal opens
+  // Clear stats when week/year changes
+  useEffect(() => {
+    setPlayerStats(null);
+  }, [currentWeek, nflSeasonYear]);
+
+  // Fetch player stats when modal opens or week/year changes
   useEffect(() => {
     if (isOpen && player && currentWeek && nflSeasonYear) {
+      const fetchPlayerStats = async () => {
+        if (!player || !currentWeek || !nflSeasonYear) return;
+        
+        setLoading(true);
+        try {
+          const response = await fetch(`http://localhost:3001/api/stats/player/${player.id || player.player_id}?week=${currentWeek}&year=${nflSeasonYear}`);
+          if (response.ok) {
+            const stats = await response.json();
+            setPlayerStats(stats);
+          } else {
+            console.error('Failed to fetch player stats:', response.status);
+            setPlayerStats(null);
+          }
+        } catch (error) {
+          console.error('Error fetching player stats:', error);
+          setPlayerStats(null);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
       fetchPlayerStats();
     }
-  }, [isOpen, player, currentWeek, nflSeasonYear]);
-
-  const fetchPlayerStats = async () => {
-    if (!player || !currentWeek || !nflSeasonYear) return;
-    
-    setLoading(true);
-    try {
-      const response = await fetch(`http://localhost:3001/api/stats/player/${player.id || player.player_id}?week=${currentWeek}&year=${nflSeasonYear}`);
-      if (response.ok) {
-        const stats = await response.json();
-        setPlayerStats(stats);
-      } else {
-        console.error('Failed to fetch player stats:', response.status);
-      }
-    } catch (error) {
-      console.error('Error fetching player stats:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [isOpen, player, currentWeek, nflSeasonYear, player?.id, player?.player_id]);
 
   if (!isOpen || !player) return null;
 

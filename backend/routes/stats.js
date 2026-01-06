@@ -1249,7 +1249,9 @@ router.post('/import-week', async (req, res) => {
     
     // Process all games for the week (using the same logic as weekly-update)
     const allPlayerStats = [];
+    const allDSTStats = [];
     const playersToCreate = new Map();
+    const gameSummaries = new Map(); // Store game summaries for D/ST processing
     let processedGames = 0;
     let failedGames = 0;
     
@@ -1268,6 +1270,9 @@ router.post('/import-week', async (req, res) => {
         }
         
         const gameSummaryData = await gameSummaryResponse.json();
+        
+        // Store game summary for D/ST processing later
+        gameSummaries.set(game.id, gameSummaryData);
         
         if (!gameSummaryData.boxscore || !gameSummaryData.boxscore.players) {
           console.log(`❌ No player stats found for ${game.name}`);
@@ -1416,7 +1421,103 @@ router.post('/import-week', async (req, res) => {
     
     console.log(`✅ Created ${playersCreated} new players`);
     
-    // Insert stats into database
+    // Process D/ST stats for all games using team-level data (reuse fetched game summaries)
+    console.log(`\n🛡️ Processing D/ST stats for all games...`);
+    
+    for (const game of scoreboardData.events) {
+      try {
+        const gameSummaryData = gameSummaries.get(game.id);
+        
+        if (!gameSummaryData) {
+          console.log(`⚠️ No game summary found for ${game.name} - skipping D/ST stats`);
+          continue;
+        }
+        
+        if (!gameSummaryData.boxscore || !gameSummaryData.boxscore.teams) {
+          console.log(`❌ No team stats found for D/ST processing: ${game.name}`);
+          continue;
+        }
+        
+        // Process D/ST stats for this game using team-level data
+        const dstResults = processGameForDST(gameSummaryData, week, year);
+        
+        // Add week/year info if missing
+        for (const dstStat of dstResults) {
+          if (!dstStat.week) dstStat.week = week;
+          if (!dstStat.year) dstStat.year = year;
+          dstStat.season_type = seasonType.toLowerCase();
+          dstStat.source = 'espn';
+        }
+        
+        allDSTStats.push(...dstResults);
+        console.log(`  🛡️ Processed D/ST stats for ${game.name}: ${dstResults.length} teams`);
+        
+      } catch (dstError) {
+        console.error(`❌ Error processing D/ST stats for ${game.name}:`, dstError.message);
+      }
+    }
+    
+    console.log(`🛡️ Total D/ST stats collected: ${allDSTStats.length}`);
+    
+    // Insert D/ST stats into database
+    let dstUpdatedCount = 0;
+    
+    for (const dstStat of allDSTStats) {
+      try {
+        // Get the D/ST player ID for this team
+        const dstPlayerResult = await db.query(
+          'SELECT id FROM players WHERE position = \'D/ST\' AND team = $1',
+          [dstStat.team]
+        );
+        
+        if (dstPlayerResult.rows.length === 0) {
+          console.log(`❌ No D/ST player found for team ${dstStat.team}`);
+          continue;
+        }
+        
+        const dstPlayerId = dstPlayerResult.rows[0].id;
+        
+        const result = await db.query(
+          `INSERT INTO player_stats (
+            player_id, week, year, season_type, sacks, interceptions_defense, fumble_recoveries,
+            safeties, blocked_kicks, punt_return_touchdowns, kickoff_return_touchdowns,
+            points_allowed, team_win, source
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          ON CONFLICT (player_id, week, year) DO UPDATE SET
+            sacks = EXCLUDED.sacks,
+            interceptions_defense = EXCLUDED.interceptions_defense,
+            fumble_recoveries = EXCLUDED.fumble_recoveries,
+            safeties = EXCLUDED.safeties,
+            blocked_kicks = EXCLUDED.blocked_kicks,
+            punt_return_touchdowns = EXCLUDED.punt_return_touchdowns,
+            kickoff_return_touchdowns = EXCLUDED.kickoff_return_touchdowns,
+            points_allowed = EXCLUDED.points_allowed,
+            team_win = EXCLUDED.team_win,
+            source = EXCLUDED.source,
+            updated_at = CURRENT_TIMESTAMP
+          RETURNING (xmax = 0)`,
+          [
+            dstPlayerId, dstStat.week, dstStat.year, dstStat.season_type,
+            dstStat.sacks, dstStat.interceptions_defense, dstStat.fumble_recoveries,
+            dstStat.safeties, dstStat.blocked_kicks, dstStat.punt_return_touchdowns,
+            dstStat.kickoff_return_touchdowns, dstStat.points_allowed, dstStat.team_win,
+            dstStat.source
+          ]
+        );
+        
+        // Check if this was an insert or update
+        if (result.rows && result.rows[0] && result.rows[0].xmax === 0) {
+          dstUpdatedCount++;
+        }
+        
+      } catch (dstError) {
+        console.error(`Failed to insert D/ST stats for ${dstStat.team}:`, dstError);
+      }
+    }
+    
+    console.log(`✅ D/ST stats processing complete: ${dstUpdatedCount} records inserted/updated`);
+    
+    // Insert player stats into database
     let insertedCount = 0;
     let updatedCount = 0;
     
@@ -1479,6 +1580,48 @@ router.post('/import-week', async (req, res) => {
     
     console.log(`✅ Stats processing complete: ${insertedCount} records inserted/updated`);
     
+    // Calculate Best Ball weekly scores for all leagues (same as weekly-update)
+    console.log(`\n🏈 Calculating Best Ball weekly scores for all leagues...`);
+    let bestBallResults = [];
+    
+    try {
+      // Get all leagues
+      const leaguesResult = await db.query('SELECT id, name FROM leagues');
+      
+      if (leaguesResult.rows.length > 0) {
+        for (const leagueRow of leaguesResult.rows) {
+          try {
+            const bestBallResult = await calculateLeagueWeeklyScores(
+              db, 
+              leagueRow.id, 
+              week, 
+              year, 
+              seasonType
+            );
+            bestBallResults.push({
+              leagueId: leagueRow.id,
+              leagueName: leagueRow.name,
+              ...bestBallResult
+            });
+            console.log(`  🏈 League ${leagueRow.name}: ${bestBallResult.scoresCalculated} team scores calculated`);
+          } catch (bestBallError) {
+            console.error(`❌ Error calculating Best Ball scores for league ${leagueRow.name}:`, bestBallError.message);
+            bestBallResults.push({
+              leagueId: leagueRow.id,
+              leagueName: leagueRow.name,
+              error: bestBallError.message
+            });
+          }
+        }
+      } else {
+        console.log(`  ⚠️ No leagues found - skipping Best Ball scoring`);
+      }
+    } catch (bestBallError) {
+      console.error(`❌ Error in Best Ball scoring process:`, bestBallError.message);
+    }
+    
+    console.log(`🏈 Best Ball scoring complete for ${bestBallResults.length} leagues`);
+    
     res.json({
       success: true,
       message: `Import completed for Week ${week}, Year ${year}`,
@@ -1489,6 +1632,7 @@ router.post('/import-week', async (req, res) => {
       gamesFailed: failedGames,
       playersCreated,
       statsProcessed: insertedCount,
+      bestBallResults,
       timestamp: new Date().toISOString()
     });
     
