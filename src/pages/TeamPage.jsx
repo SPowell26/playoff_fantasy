@@ -6,6 +6,8 @@ import { calculateTeamScore, calculatePlayerScore, calculateStartingLineupScore}
 import { calculateTeamScoreWithStats } from '../utils/teamScoreUtils';
 import PlayerSelectionForm from '../components/PlayerSelectionForm';
 import PlayerStatsModal from '../components/PlayerStatsModal';
+import { getWeekDisplayName } from '../utils/weekDisplay';
+import { API_URL } from '../config/api';
 
 const TeamPage = () => {
     const { teamId } = useParams();
@@ -64,7 +66,7 @@ const TeamPage = () => {
         try {
             const seasonTypeParam = seasonType || 'regular';
             const response = await fetch(
-                `http://localhost:3001/api/stats/season-totals/${league.id}?year=${nflSeasonYear}&seasonType=${seasonTypeParam}`
+                `${API_URL}/api/stats/season-totals/${league.id}?year=${nflSeasonYear}&seasonType=${seasonTypeParam}`
             );
             
             if (response.ok) {
@@ -90,7 +92,7 @@ const TeamPage = () => {
 
     const fetchAvailableWeeks = async () => {
         try {
-            const response = await fetch('http://localhost:3001/api/stats/available-weeks');
+            const response = await fetch(`${API_URL}/api/stats/available-weeks`);
             if (response.ok) {
                 const data = await response.json();
                 setAvailableWeeks(data.weeks || []);
@@ -112,7 +114,7 @@ const TeamPage = () => {
             console.log('🔄 Fetching team data for team ID:', teamId);
             
             // Fetch team data (which now includes league info)
-            const response = await fetch(`http://localhost:3001/api/leagues/teams/${teamId}`);
+            const response = await fetch(`${API_URL}/api/leagues/teams/${teamId}`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -137,7 +139,7 @@ const TeamPage = () => {
             console.log('🔄 Fetching team roster for team ID:', teamId);
             
             // Fetch team roster using the new flat RESTful endpoint
-            const response = await fetch(`http://localhost:3001/api/teams/${teamId}/players`);
+            const response = await fetch(`${API_URL}/api/teams/${teamId}/players`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -190,7 +192,7 @@ const TeamPage = () => {
         try {
             console.log('🔄 Attempting to remove player:', playerId, 'from team:', teamId);
             
-            const response = await fetch(`http://localhost:3001/api/teams/${teamId}/players/${playerId}`, {
+            const response = await fetch(`${API_URL}/api/teams/${teamId}/players/${playerId}`, {
                 method: 'DELETE'
             });
             
@@ -476,7 +478,7 @@ const TeamPage = () => {
                     <div className="text-sm font-medium text-white">
                         {calculatePlayerScore(player, scoringRules).toFixed(2)} pts
                     </div>
-                    <div className="text-xs text-gray-400">Week {currentWeek} ({seasonDisplay})</div>
+                    <div className="text-xs text-gray-400">{getWeekDisplayName(currentWeek, seasonType || 'regular')} ({seasonDisplay})</div>
                 </div>
             </div>
         </div>
@@ -744,7 +746,7 @@ const TeamPage = () => {
                     {/* Team Total Score */}
                     <div className="bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6">
                         <div className="text-center">
-                            <h3 className="text-lg font-medium text-white mb-2">Week {currentWeek} Score ({seasonDisplay})</h3>
+                            <h3 className="text-lg font-medium text-white mb-2">{getWeekDisplayName(currentWeek, seasonType || 'regular')} Score ({seasonDisplay})</h3>
                             <div className="text-4xl font-bold text-blue-400">{teamTotal.toFixed(2)}</div>
                             <p className="text-sm text-gray-400 mt-2">Current roster total</p>
                         </div>

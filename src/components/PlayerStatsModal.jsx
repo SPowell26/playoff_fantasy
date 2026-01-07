@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useYearly } from '../context/YearlyContext';
+import { getWeekDisplayName } from '../utils/weekDisplay';
+import { API_URL } from '../config/api';
 
 const PlayerStatsModal = ({ player, isOpen, onClose, week, year }) => {
   const [playerStats, setPlayerStats] = useState(null);
@@ -92,7 +94,7 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year }) => {
         
         setLoading(true);
         try {
-          const response = await fetch(`http://localhost:3001/api/stats/player/${player.id || player.player_id}?week=${currentWeek}&year=${nflSeasonYear}`);
+          const response = await fetch(`${API_URL}/api/stats/player/${player.id || player.player_id}?week=${currentWeek}&year=${nflSeasonYear}`);
           if (response.ok) {
             const stats = await response.json();
             setPlayerStats(stats);
@@ -124,7 +126,7 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year }) => {
               <h2 className="text-xl font-bold">{player.name}</h2>
               <p className="text-blue-100">{player.position} • {player.team}</p>
               <p className="text-blue-100">
-                Week {currentWeek} • {seasonDisplay} Season • {seasonType || 'Unknown'}
+                {getWeekDisplayName(currentWeek, seasonType || 'regular')} • {seasonDisplay} Season • {seasonType || 'Unknown'}
                 {isPlayoffs && <span className="ml-2 text-yellow-300">🏆 Playoffs</span>}
               </p>
             </div>

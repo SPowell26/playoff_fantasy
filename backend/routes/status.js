@@ -98,18 +98,11 @@ router.get('/current-week', async (req, res) => {
       }
     }
 
-    // Map ESPN week to our fantasy week system
-    let fantasyWeek = null;
-    if (seasonType === 'postseason') {
-      // Playoff weeks: ESPN week 1 = Wild Card, ESPN week 2 = Divisional, etc.
-      fantasyWeek = 18 + currentWeek; // Week 19 = Wild Card, Week 20 = Divisional, etc.
-    } else {
-      // Regular season weeks
-      fantasyWeek = currentWeek;
-    }
-
+    // Use ESPN week number directly (no fantasy week mapping needed)
+    // Playoff weeks are 1-4 (Wild Card, Divisional, Conference Championship, Super Bowl)
+    // Regular season weeks are 1-18
     const weekStatus = {
-      currentWeek: fantasyWeek,
+      currentWeek: currentWeek, // Use ESPN week number directly
       espnWeek: currentWeek,
       seasonType,
       seasonYear,

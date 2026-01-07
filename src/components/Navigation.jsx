@@ -13,7 +13,7 @@ const Navigation = () => {
         if (location.pathname.startsWith('/team/') && params.teamId) {
             // On team page - fetch team data to get league ID
             setIsLoading(true);
-            fetch(`http://localhost:3001/api/leagues/teams/${params.teamId}`)
+            fetch(`${API_URL}/api/leagues/teams/${params.teamId}`)
                 .then(res => {
                     if (!res.ok) throw new Error('Failed to fetch team');
                     return res.json();
@@ -65,7 +65,7 @@ const Navigation = () => {
                         // On team page - use onClick to fetch and navigate
                         <button
                             onClick={() => {
-                                fetch(`http://localhost:3001/api/leagues/teams/${params.teamId}`)
+                                fetch(`${API_URL}/api/leagues/teams/${params.teamId}`)
                                     .then(res => res.json())
                                     .then(teamData => {
                                         if (teamData.league?.id) {

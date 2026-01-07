@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { calculateLeagueStandings } from '../utils/teamScoreUtils';
 import { useData } from '../context/DataContext';
 import { useYearly } from '../context/YearlyContext';
+import { getWeekDisplayName } from '../utils/weekDisplay';
+import API_URL from '../config/api';
 
 const LeagueStandings = ({ teams, league, currentWeek, currentYear }) => {
   const navigate = useNavigate();
@@ -24,7 +26,7 @@ const LeagueStandings = ({ teams, league, currentWeek, currentYear }) => {
         // Use 'regular' for regular season, fallback to seasonType from context
         // Default to 'regular' if seasonType is null/undefined
         const seasonTypeParam = seasonType || 'regular';
-        const url = `http://localhost:3001/api/stats/season-totals/${league.id}?year=${currentYear}&seasonType=${seasonTypeParam}`;
+        const url = `${API_URL}/api/stats/season-totals/${league.id}?year=${currentYear}&seasonType=${seasonTypeParam}`;
         console.log('🔄 Fetching season totals:', url);
         
         const response = await fetch(url);
@@ -121,10 +123,13 @@ const LeagueStandings = ({ teams, league, currentWeek, currentYear }) => {
     );
   }
 
+  // Get week display name (handles playoff weeks)
+  const weekDisplayName = getWeekDisplayName(currentWeek, seasonType || 'regular');
+
   return (
     <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
       <h2 className="text-xl font-semibold text-white mb-6 text-center">
-        League Standings - Week {currentWeek}
+        League Standings - {weekDisplayName}
       </h2>
       
       {seasonTotalsLoading ? (
@@ -138,7 +143,7 @@ const LeagueStandings = ({ teams, league, currentWeek, currentYear }) => {
               <tr className="border-b border-gray-600">
                 <th className="text-left py-3 px-4 text-gray-300 font-medium">Rank</th>
                 <th className="text-left py-3 px-4 text-gray-300 font-medium">Team Name</th>
-                <th className="text-right py-3 px-4 text-gray-300 font-medium">Week {currentWeek}</th>
+                <th className="text-right py-3 px-4 text-gray-300 font-medium">{weekDisplayName}</th>
                 <th className="text-right py-3 px-4 text-gray-300 font-medium">Season Total</th>
                 <th className="text-center py-3 px-4 text-gray-300 font-medium">Weeks</th>
                 <th className="text-center py-3 px-4 text-gray-300 font-medium">Actions</th>

@@ -23,11 +23,12 @@ const PORT = process.env.PORT || 3001;
 
 // PostgreSQL connection pool
 const pool = new pg.Pool({
-  user: 'postgres',
-  host: 'localhost',
-  database: 'fantasy_playoff_db',
-  password: process.env.DB_PASSWORD || 'your_password_here', // Set this in .env file
-  port: 5432,
+  user: process.env.DB_USER || 'postgres',
+  host: process.env.DB_HOST || 'localhost',
+  database: process.env.DB_NAME || 'fantasy_playoff_db',
+  password: process.env.DB_PASSWORD,
+  port: parseInt(process.env.DB_PORT || '5432'),
+  ssl: process.env.DB_HOST !== 'localhost' ? { rejectUnauthorized: false } : false
 });
 
 // Test database connection

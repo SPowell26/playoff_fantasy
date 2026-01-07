@@ -4,6 +4,7 @@ import { useData } from '../context/DataContext';
 import { useYearly } from '../context/YearlyContext';
 import CreateTeamForm from '../components/CreateTeamForm';
 import LeagueStandings from '../components/LeagueStandings';
+import { API_URL } from '../config/api';
 
 const LeaguePage = () => {
   const { leagueId } = useParams();
@@ -43,7 +44,7 @@ const LeaguePage = () => {
       setTeamsLoading(true);
       console.log('🔄 Fetching teams for league:', league.id);
       
-      const response = await fetch(`http://localhost:3001/api/leagues/${league.id}/teams`);
+      const response = await fetch(`${API_URL}/api/leagues/${league.id}/teams`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -55,7 +56,7 @@ const LeaguePage = () => {
       const teamsWithRosters = await Promise.all(
         teamsData.map(async (team) => {
           try {
-            const rosterResponse = await fetch(`http://localhost:3001/api/teams/${team.id}/players`);
+            const rosterResponse = await fetch(`${API_URL}/api/teams/${team.id}/players`);
             if (rosterResponse.ok) {
               const rosterData = await rosterResponse.json();
               return { ...team, players: rosterData };
@@ -119,7 +120,7 @@ const LeaguePage = () => {
   const sendSpamMessage = async () => {
     setSpamLoading(true);
     try {
-      const response = await fetch(`/api/leagues/${leagueId}/spam-members`, {
+      const response = await fetch(`${API_URL}/api/leagues/${leagueId}/spam-members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

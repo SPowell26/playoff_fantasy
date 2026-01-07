@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { API_URL } from '../config/api';
 import { mockLeagues } from '../data/mockData';
 import { nflfastrWeeklyMockData, getAvailablePlayers } from '../data/nflfastr_weekly_mock';
 import { useYearly } from './YearlyContext';
@@ -52,7 +53,7 @@ export function DataProvider({ children }) {
     const fetchLeagues = async () => {
         try {
             console.log('🔄 Fetching leagues from backend...');
-            const response = await fetch('http://localhost:3001/api/leagues');
+            const response = await fetch(`${API_URL}/api/leagues`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -84,7 +85,7 @@ export function DataProvider({ children }) {
             console.log('🏈 Creating league via API:', { name, commissioner, commissionerEmail, year });
             
             // Create league via backend API - backend will generate the ID
-            const response = await fetch('http://localhost:3001/api/leagues', {
+            const response = await fetch(`${API_URL}/api/leagues`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -139,7 +140,7 @@ export function DataProvider({ children }) {
             console.log('🏈 Creating team via API:', { name, owner, leagueId });
             
             // Create team via backend API - backend will generate the ID
-            const response = await fetch(`http://localhost:3001/api/leagues/${leagueId}/teams`, {
+            const response = await fetch(`${API_URL}/api/leagues/${leagueId}/teams`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -257,7 +258,7 @@ export function DataProvider({ children }) {
         const fetchRealStats = async (week = 1, year = 2024) => {
             try {
                 console.log(`🔄 Fetching real stats for week ${week}, year ${year}...`);
-                const response = await fetch(`http://localhost:3001/api/stats/scoring-ready/${week}?year=${year}`);
+                const response = await fetch(`${API_URL}/api/stats/scoring-ready/${week}?year=${year}`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);

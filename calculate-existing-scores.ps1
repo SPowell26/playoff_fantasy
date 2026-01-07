@@ -20,10 +20,14 @@ Write-Host "  Calculate Scores for Existing Weeks" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# First, get available weeks
+# First, get available weeks (filtered by season type if specified)
 Write-Host "Getting available weeks from database..." -ForegroundColor Yellow
 try {
-    $availableWeeks = Invoke-RestMethod -Uri "$apiUrl/stats/available-weeks" -Method GET
+    $availableWeeksUrl = "$apiUrl/stats/available-weeks"
+    if ($SeasonType) {
+        $availableWeeksUrl += "?seasonType=$SeasonType"
+    }
+    $availableWeeks = Invoke-RestMethod -Uri $availableWeeksUrl -Method GET
     
     if ($availableWeeks.weeks.Count -eq 0) {
         Write-Host "❌ No weeks found in database" -ForegroundColor Red

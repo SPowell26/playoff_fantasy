@@ -1,4 +1,5 @@
 import React, {createContext, useContext, useState, useEffect} from 'react';
+import API_URL from '../config/api';
 
 //Create the context
 const YearlyContext = createContext();
@@ -48,7 +49,7 @@ export function YearlyProvider({children}) {
       setWeekStatusLoading(true);
       setWeekStatusError(null);
       
-      const response = await fetch('http://localhost:3001/api/status/current-week');
+      const response = await fetch(`${API_URL}/api/status/current-week`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }

@@ -1,0 +1,15 @@
+# Backend Environment Variables
+# Copy this file to backend/.env and fill in your values
+
+# Database Configuration
+DB_HOST=localhost
+DB_USER=postgres
+DB_PASSWORD=your_password_here
+DB_NAME=fantasy_playoff_db
+DB_PORT=5432
+
+# Server Configuration
+PORT=3001
+
+# CORS Configuration (frontend URL)
+FRONTEND_URL=http://localhost:5173

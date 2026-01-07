@@ -412,6 +412,7 @@ router.post('/import-playoff', async (req, res) => {
                   player_id: playerId,
                   week: playoffWeek,
                   year: 2024,
+                  season_type: 'postseason',
                   ...mappedStats,
                   source: 'espn_game_summary'
                 };
@@ -435,14 +436,14 @@ router.post('/import-playoff', async (req, res) => {
       try {
         await db.query(
           `INSERT INTO player_stats (
-            player_id, week, year, passing_yards, passing_touchdowns, interceptions,
+            player_id, week, year, season_type, passing_yards, passing_touchdowns, interceptions,
             rushing_yards, rushing_touchdowns, receiving_yards, receiving_touchdowns, receptions,
             fumbles_lost, sacks, interceptions_defense, fumble_recoveries, safeties,
             blocked_kicks, punt_return_touchdowns, kickoff_return_touchdowns,
             points_allowed, field_goals_0_39, field_goals_40_49, field_goals_50_plus,
             extra_points
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
-          ON CONFLICT (player_id, week, year) DO UPDATE SET
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+          ON CONFLICT (player_id, week, year, season_type) DO UPDATE SET
             passing_yards = EXCLUDED.passing_yards,
             passing_touchdowns = EXCLUDED.passing_touchdowns,
             interceptions = EXCLUDED.interceptions,
@@ -466,7 +467,7 @@ router.post('/import-playoff', async (req, res) => {
             extra_points = EXCLUDED.extra_points,
             updated_at = CURRENT_TIMESTAMP`,
           [
-            stat.player_id, stat.week, stat.year, stat.passing_yards, stat.passing_touchdowns, stat.interceptions,
+            stat.player_id, stat.week, stat.year, stat.season_type, stat.passing_yards, stat.passing_touchdowns, stat.interceptions,
             stat.rushing_yards, stat.rushing_touchdowns, stat.receiving_yards, stat.receiving_touchdowns, stat.receptions,
             stat.fumbles_lost, stat.sacks, stat.interceptions_defense, stat.fumble_recoveries, stat.safeties,
             stat.blocked_kicks, stat.punt_return_touchdowns, stat.kickoff_return_touchdowns,
@@ -533,7 +534,7 @@ router.post('/weekly-update', async (req, res) => {
           seasonTypeName = 'Regular Season';
           break;
         case 3:
-          seasonType = 'playoffs';
+          seasonType = 'postseason';
           seasonTypeName = 'Playoffs';
           break;
         case 4:
@@ -796,8 +797,7 @@ router.post('/weekly-update', async (req, res) => {
             points_allowed, field_goals_0_39, field_goals_40_49, field_goals_50_plus,
             extra_points
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
-          ON CONFLICT (player_id, week, year) DO UPDATE SET
-            season_type = EXCLUDED.season_type,
+          ON CONFLICT (player_id, week, year, season_type) DO UPDATE SET
             passing_yards = EXCLUDED.passing_yards,
             passing_touchdowns = EXCLUDED.passing_touchdowns,
             interceptions = EXCLUDED.interceptions,
@@ -868,7 +868,7 @@ router.post('/weekly-update', async (req, res) => {
             safeties, blocked_kicks, punt_return_touchdowns, kickoff_return_touchdowns,
             points_allowed, team_win, source
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-          ON CONFLICT (player_id, week, year) DO UPDATE SET
+          ON CONFLICT (player_id, week, year, season_type) DO UPDATE SET
             sacks = EXCLUDED.sacks,
             interceptions_defense = EXCLUDED.interceptions_defense,
             fumble_recoveries = EXCLUDED.fumble_recoveries,
@@ -1169,14 +1169,23 @@ router.get('/week/:week/leaders', async (req, res) => {
 router.get('/available-weeks', async (req, res) => {
   try {
     const db = req.app.locals.db;
+    const { seasonType } = req.query;
     
-    const query = `
-      SELECT DISTINCT week, year
+    let query = `
+      SELECT DISTINCT week, year, season_type
       FROM player_stats
-      ORDER BY year DESC, week ASC
+      WHERE 1=1
     `;
     
-    const result = await db.query(query);
+    const params = [];
+    if (seasonType) {
+      query += ` AND season_type = $1`;
+      params.push(seasonType);
+    }
+    
+    query += ` ORDER BY year DESC, week ASC`;
+    
+    const result = await db.query(query, params);
     
     res.json({
       count: result.rows.length,
@@ -1483,7 +1492,7 @@ router.post('/import-week', async (req, res) => {
             safeties, blocked_kicks, punt_return_touchdowns, kickoff_return_touchdowns,
             points_allowed, team_win, source
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-          ON CONFLICT (player_id, week, year) DO UPDATE SET
+          ON CONFLICT (player_id, week, year, season_type) DO UPDATE SET
             sacks = EXCLUDED.sacks,
             interceptions_defense = EXCLUDED.interceptions_defense,
             fumble_recoveries = EXCLUDED.fumble_recoveries,
@@ -1532,8 +1541,7 @@ router.post('/import-week', async (req, res) => {
             points_allowed, field_goals_0_39, field_goals_40_49, field_goals_50_plus,
             extra_points
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
-          ON CONFLICT (player_id, week, year) DO UPDATE SET
-            season_type = EXCLUDED.season_type,
+          ON CONFLICT (player_id, week, year, season_type) DO UPDATE SET
             passing_yards = EXCLUDED.passing_yards,
             passing_touchdowns = EXCLUDED.passing_touchdowns,
             interceptions = EXCLUDED.interceptions,

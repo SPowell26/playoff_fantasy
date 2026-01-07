@@ -21,11 +21,11 @@ const PlayerSelectionForm = ({ leagueId, teamId, onPlayerAdded, onClose }) => {
       setLoading(true);
       try {
         // Get all players from backend
-        const playersResponse = await fetch('http://localhost:3001/api/players');
+        const playersResponse = await fetch(`${API_URL}/api/players`);
         const players = await playersResponse.json();
         
         // Get already selected players for this league (using existing teams endpoint)
-        const selectedResponse = await fetch(`http://localhost:3001/api/leagues/${leagueId}/teams`);
+        const selectedResponse = await fetch(`${API_URL}/api/leagues/${leagueId}/teams`);
         const teams = await selectedResponse.json();
         
         // Filter to only show QB, RB, WR, TE, PK (kickers), D/ST positions
@@ -85,7 +85,7 @@ const PlayerSelectionForm = ({ leagueId, teamId, onPlayerAdded, onClose }) => {
     if (!selectedPlayer) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/teams/${teamId}/players`, {
+      const response = await fetch(`${API_URL}/api/teams/${teamId}/players`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

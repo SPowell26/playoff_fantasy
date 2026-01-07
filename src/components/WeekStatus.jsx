@@ -1,5 +1,6 @@
 import React from 'react';
 import { useYearly } from '../context/YearlyContext';
+import { getWeekDisplayName } from '../utils/weekDisplay';
 
 const WeekStatus = () => {
   const { 
@@ -51,17 +52,10 @@ const WeekStatus = () => {
     
     if (seasonType === 'preseason') {
       return `Preseason Week ${week}`;
-    } else if (seasonType === 'regular') {
-      if (week <= 18) {
-        return `Week ${week}`;
-      }
-    } else if (seasonType === 'postseason') {
-      if (week === 19) return 'Wild Card Weekend';
-      else if (week === 20) return 'Divisional Weekend';
-      else if (week === 21) return 'Conference Championships';
-      else if (week === 22) return 'Super Bowl';
     }
-    return `Week ${week}`;
+    
+    // Use the utility function which handles regular and postseason weeks correctly
+    return getWeekDisplayName(week, seasonType || 'regular');
   };
 
   const getSeasonTypeLabel = (type) => {
