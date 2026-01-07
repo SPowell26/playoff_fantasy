@@ -2,7 +2,7 @@ import express from 'express';
 const router = express.Router();
 
 // Import league rules for defaults
-import { getDefaultScoringRules } from '../../league-rules.js';
+import { getDefaultScoringRules } from '../league-rules.js';
 
 // GET all leagues
 router.get('/', async (req, res) => {

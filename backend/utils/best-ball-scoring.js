@@ -3,7 +3,7 @@
  * Calculates optimal weekly lineups and team scores using Best Ball logic
  */
 
-import { LEAGUE_RULES } from '../../league-rules.js';
+import { LEAGUE_RULES } from '../league-rules.js';
 
 /**
  * Calculate fantasy points for a player based on their stats and scoring rules
