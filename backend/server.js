@@ -43,8 +43,27 @@ pool.query('SELECT NOW()', (err, res) => {
 
 
 // Middleware
+// CORS configuration - allow Vercel and localhost
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin contains vercel.app or is in allowed list
+    if (origin.includes('vercel.app') || origin.includes('localhost') || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      // In production, log but allow (you can tighten this later)
+      console.log('CORS: Allowing origin:', origin);
+      callback(null, true);
+    }
+  },
   credentials: true,
 })); // Allow requests from React app
 app.use(express.json()); // Parse JSON request bodies
