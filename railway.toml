@@ -1,6 +1,7 @@
 [build]
 builder = "NIXPACKS"
 rootDirectory = "backend"
+buildCommand = "npm ci"
 
 [deploy]
 startCommand = "npm start"
