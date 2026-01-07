@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import session from 'express-session';
 import pg from 'pg';
 dotenv.config({path: './.env'});
 
@@ -12,6 +13,7 @@ console.log('PORT:', process.env.PORT);
 console.log('Current working directory:', process.cwd());
 
 // Import routes
+import authRouter from './routes/auth.js';
 import leaguesRouter from './routes/leagues.js';
 import playersRouter from './routes/players.js';
 import statsRouter from './routes/stats.js';
@@ -41,6 +43,21 @@ pool.query('SELECT NOW()', (err, res) => {
   }
 });
 
+
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'fantasy-playoff-secret-key-change-in-production',
+  name: 'fantasy.sid',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    sameSite: 'lax', // CSRF protection
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  },
+  rolling: true // Reset expiration on activity
+}));
 
 // Middleware
 // CORS configuration - allow Vercel and localhost
@@ -72,6 +89,7 @@ app.use(express.json()); // Parse JSON request bodies
 app.locals.db = pool;
 
 // Routes
+app.use('/api/auth', authRouter);
 app.use('/api/leagues', leaguesRouter);
 app.use('/api/players', playersRouter);
 app.use('/api/stats', statsRouter);

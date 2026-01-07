@@ -88,6 +88,7 @@ const PlayerSelectionForm = ({ leagueId, teamId, onPlayerAdded, onClose }) => {
       const response = await fetch(`${API_URL}/api/teams/${teamId}/players`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           player_id: selectedPlayer.id,
           roster_position: 'BN' // Default to bench, can be changed later

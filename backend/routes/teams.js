@@ -1,6 +1,63 @@
 import express from 'express';
 import { calculateLeagueWeeklyScores } from '../services/best-ball-scoring-service.js';
+import { requireCommissioner } from '../middleware/auth.js';
 const router = express.Router();
+
+/**
+ * Middleware to require commissioner authorization for team operations
+ * Looks up the league ID from the team ID and checks commissioner status
+ */
+const requireTeamCommissioner = async (req, res, next) => {
+  try {
+    const teamId = req.params.teamId;
+
+    if (!teamId) {
+      return res.status(400).json({
+        error: 'Team ID is required',
+        code: 'MISSING_TEAM_ID'
+      });
+    }
+
+    const db = req.app.locals.db;
+
+    // Get league ID from team
+    const teamResult = await db.query(
+      'SELECT league_id FROM teams WHERE id = $1',
+      [teamId]
+    );
+
+    if (teamResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Team not found',
+        code: 'TEAM_NOT_FOUND'
+      });
+    }
+
+    const leagueId = teamResult.rows[0].league_id;
+
+    // Temporarily modify params to use league ID for the requireCommissioner check
+    const originalParams = req.params;
+    req.params.id = leagueId;
+
+    // Create a modified next function that restores params
+    const modifiedNext = () => {
+      req.params = originalParams;
+      req.leagueId = leagueId;
+      next();
+    };
+
+    // Call requireCommissioner with our modified context
+    const commissionerCheck = requireCommissioner('id');
+    return commissionerCheck(req, res, modifiedNext);
+
+  } catch (error) {
+    console.error('Team commissioner check error:', error);
+    res.status(500).json({
+      error: 'Authorization check failed',
+      code: 'AUTH_CHECK_ERROR'
+    });
+  }
+};
 
 /**
  * Recalculate all weekly scores for a league when roster changes
@@ -42,7 +99,7 @@ async function recalculateLeagueScores(db, leagueId, year = 2025, seasonType = '
 }
 
 // POST add player to a team
-router.post('/:teamId/players', async (req, res) => {
+router.post('/:teamId/players', requireTeamCommissioner, async (req, res) => {
   try {
     const { teamId } = req.params;
     const { player_id, roster_position } = req.body;
@@ -145,7 +202,7 @@ router.get('/:teamId/players', async (req, res) => {
 });
 
 // DELETE remove player from a team
-router.delete('/:teamId/players/:playerId', async (req, res) => {
+router.delete('/:teamId/players/:playerId', requireTeamCommissioner, async (req, res) => {
   try {
     const { teamId, playerId } = req.params;
     console.log('🔄 DELETE /api/teams/:teamId/players/:playerId - teamId:', teamId, 'playerId:', playerId);

@@ -1,6 +1,9 @@
 import express from 'express';
 const router = express.Router();
 
+// Import middleware
+import { requireCommissioner } from '../middleware/auth.js';
+
 // Import league rules for defaults
 import { getDefaultScoringRules } from '../league-rules.js';
 
@@ -272,7 +275,7 @@ router.post('/import', async (req, res) => {
 });
 
 // PUT update league
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireCommissioner(), async (req, res) => {
   try {
     const { name, commissioner, scoring_rules } = req.body;
     const db = req.app.locals.db;
@@ -299,7 +302,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // POST create new team in league
-router.post('/:id/teams', async (req, res) => {
+router.post('/:id/teams', requireCommissioner(), async (req, res) => {
   try {
     const { name, owner } = req.body;
     const leagueId = req.params.id;
@@ -403,7 +406,7 @@ router.get('/:id/teams', async (req, res) => {
 
 
 // DELETE league
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireCommissioner(), async (req, res) => {
   try {
     const db = req.app.locals.db;
     const result = await db.query('DELETE FROM leagues WHERE id = $1 RETURNING id', [req.params.id]);

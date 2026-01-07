@@ -1,6 +1,10 @@
 import express from 'express';
 const router = express.Router();
 
+// Import auth middleware
+import { requireCommissioner, requireCommissionerOrSystem } from '../middleware/auth.js';
+
+
 // GET all players (from database)
 router.get('/', async (req, res) => {
   try {
@@ -84,7 +88,7 @@ router.get('/top/:limit', async (req, res) => {
 });
 
 // POST import players from ESPN API
-router.post('/import', async (req, res) => {
+router.post('/import', requireCommissionerOrSystem, async (req, res) => {
   try {
     const db = req.app.locals.db;
     

@@ -1,7 +1,9 @@
 import express from 'express';
 import { processGameForDST } from '../map-team-defense-stats.js';
 import { calculateLeagueWeeklyScores } from '../services/best-ball-scoring-service.js';
+import { requireCommissioner, requireCommissionerOrSystem } from '../middleware/auth.js';
 const router = express.Router();
+
 
 // GET all player stats (with optional filtering)
 router.get('/', async (req, res) => {
@@ -312,7 +314,7 @@ router.get('/summary', async (req, res) => {
 });
 
 // POST import stats (general import)
-router.post('/import', async (req, res) => {
+router.post('/import', requireCommissionerOrSystem, async (req, res) => {
   try {
     const db = req.app.locals.db;
     
@@ -332,7 +334,7 @@ router.post('/import', async (req, res) => {
 });
 
 // POST import playoff stats (moved from players route)
-router.post('/import-playoff', async (req, res) => {
+router.post('/import-playoff', requireCommissionerOrSystem, async (req, res) => {
   try {
     const db = req.app.locals.db;
     
@@ -496,7 +498,7 @@ router.post('/import-playoff', async (req, res) => {
 });
 
 // POST import weekly stats (new endpoint for entire week)
-router.post('/weekly-update', async (req, res) => {
+router.post('/weekly-update', requireCommissionerOrSystem, async (req, res) => {
   try {
     const db = req.app.locals.db;
     
@@ -1199,7 +1201,7 @@ router.get('/available-weeks', async (req, res) => {
 });
 
 // POST endpoint to manually import stats for a specific week
-router.post('/import-week', async (req, res) => {
+router.post('/import-week', requireCommissionerOrSystem, async (req, res) => {
   try {
     const { week, year } = req.body;
     

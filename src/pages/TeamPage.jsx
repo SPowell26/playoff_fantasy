@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useYearly } from '../context/YearlyContext';
+import { useAuth } from '../context/AuthContext';
 import { calculateTeamScore, calculatePlayerScore, calculateStartingLineupScore} from '../utils/calculations';
 import { calculateTeamScoreWithStats } from '../utils/teamScoreUtils';
 import PlayerSelectionForm from '../components/PlayerSelectionForm';
@@ -12,9 +13,11 @@ import { API_URL } from '../config/api';
 const TeamPage = () => {
     const { teamId } = useParams();
     const navigate = useNavigate();
+    const { isCommissionerForLeague } = useAuth();
     const [team, setTeam] = useState(null);
     const [league, setLeague] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isCommissioner, setIsCommissioner] = useState(false);
     const [showTotal, setShowTotal] = useState(true);
     const [editingPlayerId, setEditingPlayerId] = useState(null);
     const [editStats, setEditStats] = useState({});
@@ -125,6 +128,11 @@ const TeamPage = () => {
             // The backend now returns team with league info
             setTeam(teamData);
             setLeague(teamData.league);
+
+            // Check commissioner status for this league
+            if (teamData.league?.id) {
+                setIsCommissioner(isCommissionerForLeague(teamData.league.id));
+            }
             
         } catch (error) {
             console.error('❌ Failed to fetch team data:', error);
@@ -193,7 +201,8 @@ const TeamPage = () => {
             console.log('🔄 Attempting to remove player:', playerId, 'from team:', teamId);
             
             const response = await fetch(`${API_URL}/api/teams/${teamId}/players/${playerId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                credentials: 'include'
             });
             
             if (response.ok) {
@@ -447,7 +456,7 @@ const TeamPage = () => {
     };
 
     // RosterPlayer component for consistent player display
-    const RosterPlayer = ({ player, onRemove, onPlayerClick, currentWeek, scoringRules }) => (
+    const RosterPlayer = ({ player, onRemove, onPlayerClick, currentWeek, scoringRules, isCommissioner }) => (
         <div className="flex items-center justify-between w-full">
             <div className="flex-1 min-w-0">
                 <div className="flex items-center space-x-3">
@@ -463,17 +472,19 @@ const TeamPage = () => {
                 </div>
             </div>
             <div className="flex items-center space-x-4">
-                <div className="flex space-x-2">
-                    <button
-                        onClick={() => onRemove(player.player_id)}
-                        className="p-1 text-gray-400 hover:text-red-400 transition-colors"
-                        title="Remove player"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                    </button>
-                </div>
+                {isCommissioner && onRemove && (
+                    <div className="flex space-x-2">
+                        <button
+                            onClick={() => onRemove(player.player_id)}
+                            className="p-1 text-gray-400 hover:text-red-400 transition-colors"
+                            title="Remove player"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                )}
                 <div className="text-right min-w-[80px]">
                     <div className="text-sm font-medium text-white">
                         {calculatePlayerScore(player, scoringRules).toFixed(2)} pts
@@ -505,12 +516,16 @@ const TeamPage = () => {
                                     <p className="text-gray-300">Owner: {team.owner} • League: {league.name}</p>
                                 </div>
                             </div>
-                <button
-                    onClick={() => setShowPlayerSelection(true)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow-lg"
-                >
-                    Add Player
-                </button>
+                {isCommissioner ? (
+                    <button
+                        onClick={() => setShowPlayerSelection(true)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow-lg"
+                    >
+                        Add Player
+                    </button>
+                ) : (
+                    <p className="text-gray-400 italic">Commissioner login required to manage roster</p>
+                )}
                         </div>
                     </div>
             </div>
@@ -582,7 +597,7 @@ const TeamPage = () => {
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-blue-900/50 border border-blue-600 text-blue-300">QB</div>
                                         {getRosterSpotPlayer('QB', 0) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer('QB', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                            <RosterPlayer player={getRosterSpotPlayer('QB', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -596,7 +611,7 @@ const TeamPage = () => {
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-green-900/50 border border-green-600 text-green-300">RB</div>
                                         {getRosterSpotPlayer('RB', 0) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer('RB', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                            <RosterPlayer player={getRosterSpotPlayer('RB', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -610,7 +625,7 @@ const TeamPage = () => {
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-green-900/50 border border-green-600 text-green-300">RB</div>
                                         {getRosterSpotPlayer('RB', 1) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer('RB', 1)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                            <RosterPlayer player={getRosterSpotPlayer('RB', 1)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -624,7 +639,7 @@ const TeamPage = () => {
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-purple-900/50 border border-purple-600 text-purple-300">WR</div>
                                         {getRosterSpotPlayer('WR', 0) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer('WR', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                            <RosterPlayer player={getRosterSpotPlayer('WR', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -638,7 +653,7 @@ const TeamPage = () => {
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-purple-900/50 border border-purple-600 text-purple-300">WR</div>
                                         {getRosterSpotPlayer('WR', 1) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer('WR', 1)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                            <RosterPlayer player={getRosterSpotPlayer('WR', 1)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -652,7 +667,7 @@ const TeamPage = () => {
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-orange-900/50 border border-orange-600 text-orange-300">TE</div>
                                         {getRosterSpotPlayer('TE', 0) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer('TE', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                            <RosterPlayer player={getRosterSpotPlayer('TE', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -666,7 +681,7 @@ const TeamPage = () => {
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-indigo-900/50 border border-indigo-600 text-indigo-300">FLEX</div>
                                         {getFlexPlayer() ? (
-                                            <RosterPlayer player={getFlexPlayer()} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                            <RosterPlayer player={getFlexPlayer()} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -680,7 +695,7 @@ const TeamPage = () => {
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-900/50 border border-yellow-600 text-yellow-300">K</div>
                                         {getRosterSpotPlayer('K', 0) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer('K', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                            <RosterPlayer player={getRosterSpotPlayer('K', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -694,7 +709,7 @@ const TeamPage = () => {
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-red-900/50 border border-red-600 text-red-300">D/ST</div>
                                         {getRosterSpotPlayer('D/ST', 0) ? (
-                                            <RosterPlayer player={getRosterSpotPlayer('D/ST', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                            <RosterPlayer player={getRosterSpotPlayer('D/ST', 0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -716,7 +731,7 @@ const TeamPage = () => {
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-gray-700 border border-gray-500 text-gray-300">BN</div>
                                         {getBenchPlayer(0) ? (
-                                            <RosterPlayer player={getBenchPlayer(0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                            <RosterPlayer player={getBenchPlayer(0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -730,7 +745,7 @@ const TeamPage = () => {
                                     <div className="flex items-center space-x-3">
                                         <div className="px-2 py-1 text-xs font-medium rounded-full bg-gray-700 border border-gray-500 text-gray-300">BN</div>
                                         {getBenchPlayer(1) ? (
-                                            <RosterPlayer player={getBenchPlayer(1)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} />
+                                            <RosterPlayer player={getBenchPlayer(1)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
                                         ) : (
                                             <div className="text-gray-500 italic">No player selected</div>
                                         )}
@@ -811,7 +826,7 @@ const TeamPage = () => {
             </div>
 
             {/* Player Selection Modal */}
-            {showPlayerSelection && (
+            {showPlayerSelection && isCommissioner && (
                 <PlayerSelectionForm
                     leagueId={league.id}
                     teamId={teamId}

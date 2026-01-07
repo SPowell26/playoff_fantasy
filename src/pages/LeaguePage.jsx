@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useYearly } from '../context/YearlyContext';
+import { useAuth } from '../context/AuthContext';
 import CreateTeamForm from '../components/CreateTeamForm';
 import LeagueStandings from '../components/LeagueStandings';
 import { API_URL } from '../config/api';
@@ -11,6 +12,7 @@ const LeaguePage = () => {
   const navigate = useNavigate();
   const { leagues, createTeam, addTeamToLeague, fetchRealStats } = useData();
   const { currentWeek, nflSeasonYear } = useYearly();
+  const { isCommissionerForLeague } = useAuth();
   
   // State for spam modal
   const [spamLoading, setSpamLoading] = useState(false);
@@ -25,7 +27,7 @@ const LeaguePage = () => {
   const league = leagues.find(l => l.id == leagueId); // Use == instead of === for type coercion
   const [teams, setTeams] = useState([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
-  const isCommissioner = league?.commissioner === 'Current User'; // Replace with actual auth
+  const isCommissioner = isCommissionerForLeague(leagueId);
 
   // Debug logging
   console.log('🔍 LeaguePage Debug:', {
@@ -123,6 +125,7 @@ const LeaguePage = () => {
       const response = await fetch(`${API_URL}/api/leagues/${leagueId}/spam-members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           message: spamMessage,
           subject: spamSubject
@@ -188,12 +191,16 @@ const LeaguePage = () => {
       <div className="bg-gray-800 p-6 rounded-lg mb-6 border border-gray-700">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-white mb-4">Teams</h2>
-          <button
-            onClick={() => setShowCreateTeamModal(true)}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors shadow-lg font-semibold text-lg"
-          >
-            ➕ Create New Team
-          </button>
+          {isCommissioner ? (
+            <button
+              onClick={() => setShowCreateTeamModal(true)}
+              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors shadow-lg font-semibold text-lg"
+            >
+              ➕ Create New Team
+            </button>
+          ) : (
+            <p className="text-gray-400 italic">Commissioner login required to create teams</p>
+          )}
         </div>
       </div>
 
@@ -259,7 +266,7 @@ const LeaguePage = () => {
       )}
 
       {/* Create Team Modal */}
-      {showCreateTeamModal && (
+      {showCreateTeamModal && isCommissioner && (
         <CreateTeamForm
           onSubmit={async (teamName, owner) => {
             try {

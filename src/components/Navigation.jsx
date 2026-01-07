@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {Link, useLocation, useParams, useNavigate} from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { API_URL } from '../config/api';
 
-const Navigation = () => {
+const Navigation = ({ onLoginClick }) => {
     const location = useLocation();
     const params = useParams();
     const navigate = useNavigate();
+    const { isAuthenticated, currentCommissioner, logout } = useAuth();
     const [leagueLink, setLeagueLink] = useState('/');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -51,7 +54,7 @@ const Navigation = () => {
             <div className="container mx-auto flex items-center justify-between">
                 <div className="text-x1 font-bold">Fantasy Playoffs</div>
 
-                <div className="flex space-x-6">
+                <div className="flex space-x-6 items-center">
                     <Link
                     to="/"
                     className={`hover:text-gray-300 transition-colors ${
@@ -96,6 +99,30 @@ const Navigation = () => {
                             League Headquarters
                         </Link>
                     )}
+
+                    {/* Authentication Section */}
+                    <div className="ml-6 flex items-center space-x-4 border-l border-gray-600 pl-6">
+                        {isAuthenticated ? (
+                            <div className="flex items-center space-x-3">
+                                <span className="text-sm text-gray-300">
+                                    Commissioner: {currentCommissioner?.username || currentCommissioner?.email}
+                                </span>
+                                <button
+                                    onClick={logout}
+                                    className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+                                >
+                                    Logout
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={onLoginClick}
+                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                            >
+                                Commissioner Login
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </nav>
