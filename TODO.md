@@ -1,5 +1,10 @@
 # TODO List
 
+## Master Account Setup
+- Set `MASTER_EMAIL=your.email@example.com` in Railway environment variables
+- This gives god-mode access to all leagues and bypasses commissioner restrictions
+- Useful for testing, admin operations, and emergency fixes
+
 ## Pending Features
 
 ### 1. Basic Commissioner Email Auth/Permission System

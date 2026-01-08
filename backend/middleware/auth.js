@@ -11,6 +11,12 @@ import bcrypt from 'bcryptjs';
 // This bypasses commissioner authentication for system operations
 const SYSTEM_API_KEY = process.env.SYSTEM_API_KEY || 'fantasy-system-key-change-in-production';
 
+// Master email for god-mode access (all permissions, bypasses commissioner checks)
+// Set MASTER_EMAIL environment variable to your email to enable god-mode
+// Example: MASTER_EMAIL=your.email@example.com
+// This gives you full access to all leagues and system operations
+const MASTER_EMAIL = process.env.MASTER_EMAIL;
+
 /**
  * Require commissioner authentication for a route
  * Verifies the user is logged in and is a commissioner for the specified league
@@ -37,6 +43,12 @@ export function requireCommissioner(leagueIdParam = 'id') {
       }
 
       const commissionerEmail = req.session.commissioner.email;
+
+      // Check if this is a master email (god-mode access)
+      if (MASTER_EMAIL && commissionerEmail === MASTER_EMAIL) {
+        console.log('👑 Master email access granted - bypassing commissioner checks');
+        return next();
+      }
 
       // Verify this commissioner is authorized for this league
       const db = req.app.locals.db;
@@ -86,7 +98,13 @@ export function requireCommissionerOrSystem(leagueIdParam = 'id') {
         return next();
       }
 
-      // If no valid system API key, check for commissioner authentication
+      // Check for master email (god-mode access)
+      if (req.session && req.session.commissioner && MASTER_EMAIL && req.session.commissioner.email === MASTER_EMAIL) {
+        console.log('👑 Master email access granted for system operation');
+        return next();
+      }
+
+      // If no valid system API key or master email, check for commissioner authentication
       return requireCommissioner(leagueIdParam)(req, res, next);
     } catch (error) {
       console.error('Authentication middleware error:', error);
