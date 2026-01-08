@@ -39,12 +39,16 @@ router.get('/:id', async (req, res) => {
 // POST create new league
 router.post('/', async (req, res) => {
   try {
-    const { name, commissioner, commissionerEmail, year } = req.body;
+    const { name, commissioner, commissionerEmail, password, year } = req.body;
     
     // Basic validation
-    if (!name || !commissioner || !commissionerEmail || !year) {
-      return res.status(400).json({ error: 'League name, commissioner, commissioner email, and year are required' });
+    if (!name || !commissioner || !commissionerEmail || !password || !year) {
+      return res.status(400).json({ error: 'League name, commissioner, commissioner email, password, and year are required' });
     }
+    
+    if (password.length < 6){
+      return res.status(400).json({error: 'Password must be at least 6 characters long'});
+    }   
     
     const db = req.app.locals.db;
     
@@ -54,6 +58,11 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'League name already exists' });
     }
     
+    //Hash password
+    const bcrypt = await import('bcryptjs');
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
     // Use transaction to create league and first team
     const client = await db.connect();
     try {
@@ -113,9 +122,9 @@ router.post('/', async (req, res) => {
       
       // Add commissioner as league member
       await client.query(
-        `INSERT INTO league_members (league_id, team_id, user_email, username, role) 
+        `INSERT INTO league_members (league_id, team_id, user_email, username, role, password_hash) 
          VALUES ($1, $2, $3, $4, $5)`,
-        [newLeague.id, newTeam.id, commissionerEmail, commissioner, 'commissioner']
+        [newLeague.id, newTeam.id, commissionerEmail, commissioner, 'commissioner', passwordHash]
       );
       
       await client.query('COMMIT');

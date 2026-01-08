@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { validateLeagueName, validateCommissionerName, validateEmail, validateLeagueRules } from '../utils/validation.js';
+import { validateLeagueName, validateCommissionerName, validateEmail, validatePassword, validateLeagueRules } from '../utils/validation.js';
 
 const CreateLeagueForm = ({ onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
     commissioner: '',
     commissionerEmail: '',
+    password: '',
     year: new Date().getFullYear()
   });
   
@@ -61,6 +62,16 @@ const CreateLeagueForm = ({ onSubmit, onCancel }) => {
         newErrors.commissionerEmail = emailValidation.error;
       }
     }
+
+    // Validate password
+    if (!formData.password.trim()) {
+      newErrors.password = 'Password is required';
+    } else {
+      const passwordValidation = validatePassword(formData.password);
+      if (!passwordValidation.valid) {
+        newErrors.password = passwordValidation.error;
+      }
+    } 
     
     // Validate year
     const currentYear = new Date().getFullYear();
@@ -87,6 +98,7 @@ const CreateLeagueForm = ({ onSubmit, onCancel }) => {
         name: formData.name.trim(),
         commissioner: formData.commissioner.trim(),
         commissionerEmail: formData.commissionerEmail.trim(),
+        password: formData.password.trim(),
         year: parseInt(formData.year)
       };
       
@@ -159,6 +171,26 @@ const CreateLeagueForm = ({ onSubmit, onCancel }) => {
           />
           {errors.commissionerEmail && <span className="error-message">{errors.commissionerEmail}</span>}
         </div>
+
+
+        <div className="form-group">
+          <label htmlFor="password">
+            Password <span className="required">*</span>
+            <span className="char-count">{formData.password.length}/255</span>
+          </label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            value={formData.password}
+            onChange={handleInputChange}
+            className={errors.password ? 'error' : ''}
+            placeholder="Enter password..."
+            required
+          />
+          {errors.password && <span className="error-message">{errors.password}</span>}
+        </div>
+
 
         <div className="form-group">
           <label htmlFor="year">

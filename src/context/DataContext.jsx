@@ -67,7 +67,7 @@ export function DataProvider({ children }) {
     };
     
     // Basic function to create a new league
-    const createLeague = async (name, commissioner, commissionerEmail, year) => {
+    const createLeague = async (name, commissioner, commissionerEmail, password, year) => {
         try {
             // Validate inputs
             if (!name || !commissioner || !commissionerEmail) {
@@ -82,8 +82,8 @@ export function DataProvider({ children }) {
                 throw new Error('Commissioner name must be at least 2 characters');
             }
             
-            console.log('🏈 Creating league via API:', { name, commissioner, commissionerEmail, year });
-            
+            console.log('🏈 Creating league via API:', { name, commissioner, commissionerEmail, password: '[HIDDEN]', year });
+
             // Create league via backend API - backend will generate the ID
             const response = await fetch(`${API_URL}/api/leagues`, {
                 method: 'POST',
@@ -94,6 +94,7 @@ export function DataProvider({ children }) {
                     name,
                     commissioner,
                     commissionerEmail,
+                    password,
                     year: year || currentYear
                 })
             });

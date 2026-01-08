@@ -265,6 +265,19 @@ export function validateUsername(username) {
 }
 
 /**
+ * Validate password
+ */
+export function validatePassword(password) {
+  if (!password || password.length < 6) {
+    return {valid: false, error: 'Password must be at least 6 characters long' };
+}
+  if (password.length > 255) {  
+    return { valid: false, error: 'Password cannot exceed 255 characters' }
+}
+  return validateTextInput(password, 'Password');
+};
+
+/**
  * Validate email address
  */
 export function validateEmail(email) {
