@@ -50,9 +50,10 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-    sameSite: 'lax', // CSRF protection
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    secure: true, // Always use secure cookies in production (required for cross-site)
+    sameSite: 'none', // Allow cross-site cookies (needed for Vercel frontend to Railway backend)
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    // Don't set domain - let browser handle it
   },
   rolling: true // Reset expiration on activity
 }));
