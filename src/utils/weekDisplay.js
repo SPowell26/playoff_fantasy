@@ -14,7 +14,7 @@ export function getWeekDisplayName(week, seasonType) {
     const playoffWeekNames = {
       1: 'Wild Card',
       2: 'Divisional',
-      3: 'Conference Championship',
+      3: 'Conference',
       4: 'Super Bowl'
     };
     return playoffWeekNames[week] || `Week ${week}`;

@@ -231,7 +231,7 @@ const CreateLeagueForm = ({ onSubmit, onCancel }) => {
             required
           >
             <option value="regular">Regular Season (Weeks 1-18)</option>
-            <option value="postseason">Postseason (Wild Card, Divisional, Conference Championship, Super Bowl)</option>
+            <option value="postseason">Postseason (Wild Card, Divisional, Conference, Super Bowl)</option>
           </select>
           {errors.season_type && <span className="error-message">{errors.season_type}</span>}
         </div>

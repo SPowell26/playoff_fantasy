@@ -47,10 +47,10 @@ const TeamPage = () => {
 
     // Fetch available weeks when component mounts or league changes
     useEffect(() => {
-        if (league?.season_type) {
+        if (league?.season_type && nflSeasonYear) {
             fetchAvailableWeeks();
         }
-    }, [league?.season_type, league?.id]);
+    }, [league?.season_type, league?.id, nflSeasonYear]);
 
     // Fetch stats when week, year, or league season_type changes
     // Don't fetch until league data is loaded to ensure we use the correct season_type
@@ -95,31 +95,32 @@ const TeamPage = () => {
 
     const fetchAvailableWeeks = async () => {
         try {
-            // Fetch weeks filtered by league's season_type if available
+            // Generate all possible weeks based on league's season_type, not from database
             const seasonTypeParam = league?.season_type || 'regular';
-            const response = await fetch(`${API_URL}/api/stats/available-weeks?seasonType=${seasonTypeParam}`);
-            if (response.ok) {
-                const data = await response.json();
-                let weeks = data.weeks || [];
-                
-                // For postseason leagues, only show weeks 1-4
-                if (seasonTypeParam === 'postseason') {
-                    weeks = weeks.filter(w => w.week >= 1 && w.week <= 4);
-                } else if (seasonTypeParam === 'regular') {
-                    // For regular season leagues, only show weeks 1-18
-                    weeks = weeks.filter(w => w.week >= 1 && w.week <= 18);
-                }
-                
-                setAvailableWeeks(weeks);
-                
-                // Set default week to the first available
-                if (weeks.length > 0) {
-                    const firstWeek = weeks[0];
-                    setCurrentWeek(firstWeek.week);
-                }
+            
+            let maxWeek = 18; // Default to regular season
+            if (seasonTypeParam === 'postseason') {
+                maxWeek = 4;
+            }
+            
+            // Generate weeks array for current year
+            const weeks = [];
+            for (let week = 1; week <= maxWeek; week++) {
+                weeks.push({
+                    week: week,
+                    year: nflSeasonYear,
+                    season_type: seasonTypeParam
+                });
+            }
+            
+            setAvailableWeeks(weeks);
+            
+            // Set default week to 1 if not already set
+            if (!currentWeek || currentWeek > maxWeek) {
+                setCurrentWeek(1);
             }
         } catch (error) {
-            console.error('Failed to fetch available weeks:', error);
+            console.error('Failed to generate available weeks:', error);
         }
     };
 
@@ -607,7 +608,6 @@ const TeamPage = () => {
                                 className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-white"
                             >
                                 {availableWeeks
-                                    .filter(w => w.year === nflSeasonYear)
                                     .sort((a, b) => a.week - b.week)
                                     .map(week => (
                                         <option key={`${week.year}-${week.week}`} value={week.week}>
@@ -617,7 +617,7 @@ const TeamPage = () => {
                             </select>
                         </div>
                         <div className="text-sm text-gray-400">
-                            Available: {availableWeeks.filter(w => w.year === nflSeasonYear).length} weeks
+                            {seasonType === 'postseason' ? '4' : '18'} weeks
                         </div>
                     </div>
                 </div>
