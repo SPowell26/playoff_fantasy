@@ -1,4 +1,6 @@
 import express from 'express';
+import { requireCommissionerOrSystem } from '../middleware/auth.js';
+import { fetchAndStoreWeeklySchedule } from '../cron/scheduler.js';
 const router = express.Router();
 
 // Cache for week status to avoid hitting ESPN API too frequently
@@ -211,6 +213,32 @@ router.get('/debug', async (req, res) => {
     console.error('❌ Debug endpoint failed:', error);
     res.status(500).json({ 
       error: 'Debug endpoint failed',
+      message: error.message 
+    });
+  }
+});
+
+// POST manually fetch and store weekly game schedule
+// This allows triggering the schedule fetch outside of the Wednesday cron job
+router.post('/fetch-schedule', requireCommissionerOrSystem, async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    const systemApiKey = process.env.SYSTEM_API_KEY;
+    
+    console.log('📅 Manual schedule fetch triggered');
+    
+    // Call the schedule fetch function
+    await fetchAndStoreWeeklySchedule(db, systemApiKey);
+    
+    res.json({
+      success: true,
+      message: 'Weekly game schedule fetched and stored successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Failed to fetch schedule:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch schedule',
       message: error.message 
     });
   }

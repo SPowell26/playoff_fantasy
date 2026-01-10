@@ -22,8 +22,9 @@ let isPullingActive = false;
 /**
  * Fetch and store weekly game schedule from ESPN
  * This runs on Wednesday to get the week's game times
+ * Can also be called manually via API endpoint
  */
-async function fetchAndStoreWeeklySchedule(db, systemApiKey) {
+export async function fetchAndStoreWeeklySchedule(db, systemApiKey) {
   try {
     console.log('📅 [CRON] Fetching weekly game schedule...');
     
