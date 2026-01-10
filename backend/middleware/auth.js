@@ -224,13 +224,37 @@ export async function loginCommissioner(req, res) {
 
     if (isMaster) {
       console.log('👑 Master account login successful:', email);
+      console.log('🔍 Session details before save:', {
+        sessionId: req.sessionID,
+        hasCommissioner: !!req.session.commissioner,
+        email: req.session.commissioner?.email,
+        isMaster: req.session.commissioner?.isMaster
+      });
     }
 
-    res.json({
-      success: true,
-      message: 'Login successful',
-      commissioner: req.session.commissioner,
-      isMaster: isMaster
+    // Save session and send response after save
+    req.session.save((err) => {
+      if (err) {
+        console.error('❌ Error saving session:', err);
+        return res.status(500).json({
+          error: 'Failed to save session',
+          code: 'SESSION_SAVE_ERROR'
+        });
+      }
+      
+      console.log('✅ Session saved successfully, sessionId:', req.sessionID);
+      console.log('🍪 Cookie will be set:', {
+        sessionId: req.sessionID,
+        cookieName: 'fantasy.sid'
+      });
+      
+      // Send response after session is saved
+      res.json({
+        success: true,
+        message: 'Login successful',
+        commissioner: req.session.commissioner,
+        isMaster: isMaster
+      });
     });
   } catch (error) {
     console.error('Login error:', error);
