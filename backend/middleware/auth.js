@@ -30,8 +30,18 @@ function getMasterEmail() {
 export function requireCommissioner(leagueIdParam = 'id') {
   return async (req, res, next) => {
     try {
+      // Debug logging
+      console.log('🔍 Auth check:', {
+        hasSession: !!req.session,
+        hasCommissioner: !!(req.session && req.session.commissioner),
+        sessionId: req.session?.id,
+        commissionerEmail: req.session?.commissioner?.email,
+        cookies: req.headers.cookie ? 'present' : 'missing'
+      });
+      
       // Check if user is authenticated
       if (!req.session || !req.session.commissioner) {
+        console.log('❌ Authentication failed - no session or commissioner');
         return res.status(401).json({
           error: 'Authentication required. Please log in as a commissioner.',
           code: 'AUTH_REQUIRED'
