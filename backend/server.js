@@ -47,7 +47,7 @@ pool.query('SELECT NOW()', (err, res) => {
 const PgSession = pgSession(session);
 
 // Session configuration
-app.use(session({
+const sessionConfig = {
   store: new PgSession({
     pool: pool, // Use existing PostgreSQL connection pool
     tableName: 'user_sessions', // Table name for sessions
@@ -65,7 +65,20 @@ app.use(session({
     // Don't set domain - let browser handle it
   },
   rolling: true // Reset expiration on activity
-}));
+};
+
+app.use(session(sessionConfig));
+
+// Log session configuration (without secret)
+console.log('🔐 Session configuration:', {
+  store: 'PostgreSQL (connect-pg-simple)',
+  tableName: 'user_sessions',
+  cookieName: sessionConfig.name,
+  cookieSecure: sessionConfig.cookie.secure,
+  cookieSameSite: sessionConfig.cookie.sameSite,
+  cookieHttpOnly: sessionConfig.cookie.httpOnly,
+  maxAge: sessionConfig.cookie.maxAge
+});
 
 // Middleware
 // CORS configuration - allow Vercel and localhost
