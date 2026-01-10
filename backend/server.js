@@ -22,6 +22,10 @@ import teamsRouter from './routes/teams.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust proxy - Required for Railway and other platforms behind reverse proxy
+// This ensures req.secure, req.protocol, etc. work correctly
+app.set('trust proxy', 1);
+
 // PostgreSQL connection pool
 const pool = new pg.Pool({
   user: process.env.DB_USER || 'postgres',
