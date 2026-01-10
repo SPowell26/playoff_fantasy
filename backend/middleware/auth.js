@@ -232,6 +232,9 @@ export async function loginCommissioner(req, res) {
       });
     }
 
+    // Mark session as modified to ensure it's saved
+    req.session.touch();
+    
     // Save session explicitly first
     req.session.save((err) => {
       if (err) {
@@ -258,12 +261,21 @@ export async function loginCommissioner(req, res) {
         hasSetCookie: !!res.getHeader('Set-Cookie')
       });
       
-      // Send response after session is saved and cookie is set
+      // Express-session will automatically set the cookie when we send the response
+      // Log the Set-Cookie header to verify it's being set
+      console.log('🍪 Response headers before send:', {
+        sessionId: req.sessionID,
+        cookieName: 'fantasy.sid',
+        setCookieHeader: res.getHeader('Set-Cookie')
+      });
+      
+      // Send response - express-session will attach the cookie automatically
       res.json({
         success: true,
         message: 'Login successful',
         commissioner: req.session.commissioner,
-        isMaster: isMaster
+        isMaster: isMaster,
+        sessionId: req.sessionID // Include in response for debugging
       });
     });
   } catch (error) {
