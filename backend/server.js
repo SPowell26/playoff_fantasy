@@ -7,6 +7,7 @@ import express from 'express';
 import cors from 'cors';
 import session from 'express-session';
 import pg from 'pg';
+import pgSession from 'connect-pg-simple';
 
 // Environment loaded
 
@@ -42,8 +43,16 @@ pool.query('SELECT NOW()', (err, res) => {
 });
 
 
+// Session store configuration (PostgreSQL-based for production)
+const PgSession = pgSession(session);
+
 // Session configuration
 app.use(session({
+  store: new PgSession({
+    pool: pool, // Use existing PostgreSQL connection pool
+    tableName: 'user_sessions', // Table name for sessions
+    createTableIfMissing: true, // Auto-create table if it doesn't exist
+  }),
   secret: process.env.SESSION_SECRET || 'fantasy-playoff-secret-key-change-in-production',
   name: 'fantasy.sid',
   resave: false,

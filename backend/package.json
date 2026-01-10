@@ -19,15 +19,14 @@
   "description": "Express.js backend for Fantasy Playoff Football application",
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "connect-pg-simple": "^9.0.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "express-session": "^1.18.0",
-    "node-fetch": "^3.3.2",
-    "pg": "^8.16.3",
     "node-cron": "^3.0.3",
-    "pg": "^8.16.3",
-    "node-cron": "^3.0.3"
+    "node-fetch": "^3.3.2",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
