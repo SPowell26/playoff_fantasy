@@ -7,7 +7,8 @@ const CreateLeagueForm = ({ onSubmit, onCancel }) => {
     commissioner: '',
     commissionerEmail: '',
     password: '',
-    year: new Date().getFullYear()
+    year: new Date().getFullYear(),
+    season_type: 'regular'
   });
   
   const [errors, setErrors] = useState({});
@@ -99,7 +100,8 @@ const CreateLeagueForm = ({ onSubmit, onCancel }) => {
         commissioner: formData.commissioner.trim(),
         commissionerEmail: formData.commissionerEmail.trim(),
         password: formData.password.trim(),
-        year: parseInt(formData.year)
+        year: parseInt(formData.year),
+        season_type: formData.season_type
       };
       
       await onSubmit(sanitizedData);
@@ -214,6 +216,24 @@ const CreateLeagueForm = ({ onSubmit, onCancel }) => {
             })}
           </select>
           {errors.year && <span className="error-message">{errors.year}</span>}
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="season_type">
+            Season Type <span className="required">*</span>
+          </label>
+          <select
+            id="season_type"
+            name="season_type"
+            value={formData.season_type}
+            onChange={handleInputChange}
+            className={errors.season_type ? 'error' : ''}
+            required
+          >
+            <option value="regular">Regular Season (Weeks 1-18)</option>
+            <option value="postseason">Postseason (Wild Card, Divisional, Conference Championship, Super Bowl)</option>
+          </select>
+          {errors.season_type && <span className="error-message">{errors.season_type}</span>}
         </div>
 
         {errors.submit && (

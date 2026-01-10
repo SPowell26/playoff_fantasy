@@ -1,4 +1,5 @@
 import express from 'express';
+import bcrypt from 'bcryptjs';
 const router = express.Router();
 
 // Import middleware
@@ -39,16 +40,22 @@ router.get('/:id', async (req, res) => {
 // POST create new league
 router.post('/', async (req, res) => {
   try {
-    const { name, commissioner, commissionerEmail, password, year } = req.body;
+    const { name, commissioner, commissionerEmail, password, year, season_type } = req.body;
     
     // Basic validation
     if (!name || !commissioner || !commissionerEmail || !password || !year) {
       return res.status(400).json({ error: 'League name, commissioner, commissioner email, password, and year are required' });
     }
     
+    // Validate season_type and default to 'regular' if not provided
+    const validSeasonTypes = ['regular', 'postseason', 'preseason'];
+    const leagueSeasonType = season_type && validSeasonTypes.includes(season_type) 
+      ? season_type 
+      : 'regular';
+    
     if (password.length < 6){
       return res.status(400).json({error: 'Password must be at least 6 characters long'});
-    }   
+    }
     
     const db = req.app.locals.db;
     
@@ -58,11 +65,10 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'League name already exists' });
     }
     
-    //Hash password
-    const bcrypt = await import('bcryptjs');
+    // Hash password
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password, saltRounds);
-
+    
     // Use transaction to create league and first team
     const client = await db.connect();
     try {
@@ -70,13 +76,14 @@ router.post('/', async (req, res) => {
       
       // Create the league - let database auto-generate ID
       const leagueResult = await client.query(
-        `INSERT INTO leagues (name, commissioner, commissioner_email, year, scoring_rules, max_teams, bench_spots, flex_spots) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        `INSERT INTO leagues (name, commissioner, commissioner_email, year, season_type, scoring_rules, max_teams, bench_spots, flex_spots) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
         [
           name,
           commissioner,
           commissionerEmail,
           year,
+          leagueSeasonType,
           JSON.stringify({
             offensive: {
               passing: { yardsPerPoint: 0.04, touchdownPoints: 4, interceptionPoints: -2 },
@@ -122,8 +129,8 @@ router.post('/', async (req, res) => {
       
       // Add commissioner as league member
       await client.query(
-        `INSERT INTO league_members (league_id, team_id, user_email, username, role, password_hash) 
-         VALUES ($1, $2, $3, $4, $5)`,
+        `INSERT INTO league_members (league_id, team_id, user_email, username, role, password_hash)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
         [newLeague.id, newTeam.id, commissionerEmail, commissioner, 'commissioner', passwordHash]
       );
       

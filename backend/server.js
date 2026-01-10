@@ -1,16 +1,14 @@
-import express from 'express';
-import cors from 'cors';
+// MUST load dotenv FIRST before any other imports that might use process.env
 import dotenv from 'dotenv';
-import session from 'express-session';
-import pg from 'pg';
 dotenv.config({path: './.env'});
 
-// Debug logging to see what's being read from .env
-console.log(' Environment check:');
-console.log('DB_PASSWORD:', process.env.DB_PASSWORD);
-console.log('DB_PASSWORD length:', process.env.DB_PASSWORD?.length);
-console.log('PORT:', process.env.PORT);
-console.log('Current working directory:', process.cwd());
+// Now import everything else
+import express from 'express';
+import cors from 'cors';
+import session from 'express-session';
+import pg from 'pg';
+
+// Environment loaded
 
 // Import routes
 import authRouter from './routes/auth.js';

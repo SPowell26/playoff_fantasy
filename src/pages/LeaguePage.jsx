@@ -11,7 +11,7 @@ const LeaguePage = () => {
   const { leagueId } = useParams();
   const navigate = useNavigate();
   const { leagues, createTeam, addTeamToLeague, fetchRealStats } = useData();
-  const { currentWeek, nflSeasonYear } = useYearly();
+  const { currentWeek, nflSeasonYear, seasonType: globalSeasonType } = useYearly();
   const { isCommissionerForLeague } = useAuth();
   
   // State for spam modal
@@ -25,6 +25,9 @@ const LeaguePage = () => {
   
   // Find the league from DataContext - handle both string and integer IDs
   const league = leagues.find(l => l.id == leagueId); // Use == instead of === for type coercion
+  
+  // Use league's season_type if available, otherwise fall back to global context
+  const seasonType = league?.season_type || globalSeasonType || 'regular';
   const [teams, setTeams] = useState([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
   const isCommissioner = isCommissionerForLeague(leagueId);
@@ -101,13 +104,19 @@ const LeaguePage = () => {
     fetchTeams();
   }, [league, leagueId, navigate, leagues.length]);
 
-  // Fetch real stats when currentWeek and nflSeasonYear are available
+  // Fetch real stats when currentWeek, nflSeasonYear, and league are available
+  // Use league's season_type to filter stats correctly
   useEffect(() => {
-    if (currentWeek && nflSeasonYear && league) {
-      console.log('🔄 Fetching real stats for league page:', { currentWeek, nflSeasonYear, league: league.name });
-      fetchRealStats(currentWeek, nflSeasonYear);
+    if (currentWeek && nflSeasonYear && league && league.season_type) {
+      console.log('🔄 Fetching real stats for league page:', { 
+        currentWeek, 
+        nflSeasonYear, 
+        league: league.name,
+        season_type: league.season_type 
+      });
+      fetchRealStats(currentWeek, nflSeasonYear, league.season_type);
     }
-  }, [currentWeek, nflSeasonYear, league?.id]);
+  }, [currentWeek, nflSeasonYear, league?.id, league?.season_type]);
 
   const handleSpamMembers = async () => {
     // Set default message if empty
@@ -192,12 +201,12 @@ const LeaguePage = () => {
         <div className="text-center">
           <h2 className="text-xl font-semibold text-white mb-4">Teams</h2>
           {isCommissioner ? (
-            <button
-              onClick={() => setShowCreateTeamModal(true)}
-              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors shadow-lg font-semibold text-lg"
-            >
-              ➕ Create New Team
-            </button>
+          <button
+            onClick={() => setShowCreateTeamModal(true)}
+            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors shadow-lg font-semibold text-lg"
+          >
+            ➕ Create New Team
+          </button>
           ) : (
             <p className="text-gray-400 italic">Commissioner login required to create teams</p>
           )}

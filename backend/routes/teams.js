@@ -112,9 +112,9 @@ router.post('/:teamId/players', requireTeamCommissioner, async (req, res) => {
     
     const db = req.app.locals.db;
     
-    // Get the team and its league (with year)
+    // Get the team and its league (with year and season_type)
     const teamResult = await db.query(
-      'SELECT t.*, l.id as league_id, l.year as league_year FROM teams t JOIN leagues l ON t.league_id = l.id WHERE t.id = $1',
+      'SELECT t.*, l.id as league_id, l.year as league_year, l.season_type as league_season_type FROM teams t JOIN leagues l ON t.league_id = l.id WHERE t.id = $1',
       [teamId]
     );
     
@@ -151,7 +151,7 @@ router.post('/:teamId/players', requireTeamCommissioner, async (req, res) => {
     const playerResult = await db.query('SELECT * FROM players WHERE id = $1', [player_id]);
     
     // Recalculate all weekly scores for this league (background task, don't wait)
-    recalculateLeagueScores(db, team.league_id, team.league_year || 2025, 'regular').catch(err => {
+    recalculateLeagueScores(db, team.league_id, team.league_year || 2025, team.league_season_type || 'regular').catch(err => {
       console.error('Error in background score recalculation:', err);
     });
     
@@ -227,16 +227,16 @@ router.delete('/:teamId/players/:playerId', requireTeamCommissioner, async (req,
       return res.status(404).json({ error: 'Player not found on this team' });
     }
     
-    // Get the team and its league for recalculation
+    // Get the team and its league for recalculation (with year and season_type)
     const teamResult = await db.query(
-      'SELECT t.*, l.id as league_id, l.year as league_year FROM teams t JOIN leagues l ON t.league_id = l.id WHERE t.id = $1',
+      'SELECT t.*, l.id as league_id, l.year as league_year, l.season_type as league_season_type FROM teams t JOIN leagues l ON t.league_id = l.id WHERE t.id = $1',
       [teamId]
     );
     
     if (teamResult.rows.length > 0) {
       const team = teamResult.rows[0];
       // Recalculate all weekly scores for this league (background task, don't wait)
-      recalculateLeagueScores(db, team.league_id, team.league_year || 2025, 'regular').catch(err => {
+      recalculateLeagueScores(db, team.league_id, team.league_year || 2025, team.league_season_type || 'regular').catch(err => {
         console.error('Error in background score recalculation:', err);
       });
     }

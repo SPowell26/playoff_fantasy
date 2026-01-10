@@ -3,12 +3,14 @@ import { useYearly } from '../context/YearlyContext';
 import { getWeekDisplayName } from '../utils/weekDisplay';
 import { API_URL } from '../config/api';
 
-const PlayerStatsModal = ({ player, isOpen, onClose, week, year }) => {
+const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: leagueSeasonType }) => {
   const [playerStats, setPlayerStats] = useState(null);
   const [loading, setLoading] = useState(false);
   
   // Use provided week/year or fall back to context
-  const { currentWeek: contextWeek, nflSeasonYear: contextYear, seasonDisplay, seasonType, isPlayoffs } = useYearly();
+  const { currentWeek: contextWeek, nflSeasonYear: contextYear, seasonDisplay, seasonType: globalSeasonType, isPlayoffs } = useYearly();
+  // Use league's season_type if provided, otherwise fall back to global context
+  const seasonType = leagueSeasonType || globalSeasonType || 'regular';
   const currentWeek = week || contextWeek;
   const nflSeasonYear = year || contextYear;
 

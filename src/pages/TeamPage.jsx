@@ -27,7 +27,9 @@ const TeamPage = () => {
     const [selectedPlayerForStats, setSelectedPlayerForStats] = useState(null);
     const [showPlayerStatsModal, setShowPlayerStatsModal] = useState(false);
     const { fetchRealStats, getPlayerWithRealStats } = useData();
-    const { nflSeasonYear, seasonDisplay, seasonType } = useYearly();
+    const { nflSeasonYear, seasonDisplay, seasonType: globalSeasonType } = useYearly();
+    // Use league's season_type if available, otherwise fall back to global context
+    const seasonType = league?.season_type || globalSeasonType || 'regular';
     const [teamSeasonStats, setTeamSeasonStats] = useState(null);
     const [teamRank, setTeamRank] = useState(null);
 
@@ -43,31 +45,29 @@ const TeamPage = () => {
         }
     }, [team?.id]); // Only depend on team ID, not the entire team object
 
-    // Fetch available weeks when component mounts
+    // Fetch available weeks when component mounts or league changes
     useEffect(() => {
-        fetchAvailableWeeks();
-    }, []);
-
-    // Fetch stats when component mounts with initial week/year
-    useEffect(() => {
-        if (currentWeek && nflSeasonYear) {
-            fetchRealStats(currentWeek, nflSeasonYear);
+        if (league?.season_type) {
+            fetchAvailableWeeks();
         }
-    }, []); // Only run once on mount
+    }, [league?.season_type, league?.id]);
 
-    // Fetch stats when week or year changes
+    // Fetch stats when week, year, or league season_type changes
+    // Don't fetch until league data is loaded to ensure we use the correct season_type
     useEffect(() => {
-        if (currentWeek && nflSeasonYear) {
-            fetchRealStats(currentWeek, nflSeasonYear);
+        if (currentWeek && nflSeasonYear && league?.season_type) {
+            console.log(`🔄 Fetching stats for week ${currentWeek}, year ${nflSeasonYear}, season_type: ${league.season_type}`);
+            fetchRealStats(currentWeek, nflSeasonYear, league.season_type);
         }
-    }, [currentWeek, nflSeasonYear]);
+    }, [currentWeek, nflSeasonYear, league?.season_type]);
 
     // Fetch season totals for this team
     const fetchTeamSeasonStats = useCallback(async () => {
         if (!league?.id || !nflSeasonYear || !team?.id) return;
         
         try {
-            const seasonTypeParam = seasonType || 'regular';
+            // Use league's season_type (already set above)
+            const seasonTypeParam = seasonType;
             const response = await fetch(
                 `${API_URL}/api/stats/season-totals/${league.id}?year=${nflSeasonYear}&seasonType=${seasonTypeParam}`
             );
@@ -95,14 +95,26 @@ const TeamPage = () => {
 
     const fetchAvailableWeeks = async () => {
         try {
-            const response = await fetch(`${API_URL}/api/stats/available-weeks`);
+            // Fetch weeks filtered by league's season_type if available
+            const seasonTypeParam = league?.season_type || 'regular';
+            const response = await fetch(`${API_URL}/api/stats/available-weeks?seasonType=${seasonTypeParam}`);
             if (response.ok) {
                 const data = await response.json();
-                setAvailableWeeks(data.weeks || []);
+                let weeks = data.weeks || [];
+                
+                // For postseason leagues, only show weeks 1-4
+                if (seasonTypeParam === 'postseason') {
+                    weeks = weeks.filter(w => w.week >= 1 && w.week <= 4);
+                } else if (seasonTypeParam === 'regular') {
+                    // For regular season leagues, only show weeks 1-18
+                    weeks = weeks.filter(w => w.week >= 1 && w.week <= 18);
+                }
+                
+                setAvailableWeeks(weeks);
                 
                 // Set default week to the first available
-                if (data.weeks && data.weeks.length > 0) {
-                    const firstWeek = data.weeks[0];
+                if (weeks.length > 0) {
+                    const firstWeek = weeks[0];
                     setCurrentWeek(firstWeek.week);
                 }
             }
@@ -264,7 +276,7 @@ const TeamPage = () => {
         ...team,
         players: (team.players || []).map(player => {
             console.log('🔍 Processing player:', player.player_id, player.name, 'from team roster');
-            const playerWithStats = getPlayerWithRealStats(player.player_id, currentWeek);
+            const playerWithStats = getPlayerWithRealStats(player.player_id, currentWeek, seasonType);
             if (playerWithStats) {
                 console.log('🔍 Player with stats:', playerWithStats.id, playerWithStats.name, 'Stats:', playerWithStats.stats);
                 
@@ -367,7 +379,7 @@ const TeamPage = () => {
     console.log('🔍 teamWithRealStats.players:', teamWithRealStats.players);
     
     // Use modular team score calculation (same logic as LeaguePage)
-    const teamScoreData = calculateTeamScoreWithStats(team, league, getPlayerWithRealStats, currentWeek);
+    const teamScoreData = calculateTeamScoreWithStats(team, league, getPlayerWithRealStats, currentWeek, seasonType);
     const teamTotal = teamScoreData.weeklyScore;
     
     // Calculate best ball lineup (simple version)
@@ -473,17 +485,17 @@ const TeamPage = () => {
             </div>
             <div className="flex items-center space-x-4">
                 {isCommissioner && onRemove && (
-                    <div className="flex space-x-2">
-                        <button
-                            onClick={() => onRemove(player.player_id)}
-                            className="p-1 text-gray-400 hover:text-red-400 transition-colors"
-                            title="Remove player"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                        </button>
-                    </div>
+                <div className="flex space-x-2">
+                    <button
+                        onClick={() => onRemove(player.player_id)}
+                        className="p-1 text-gray-400 hover:text-red-400 transition-colors"
+                        title="Remove player"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
+                </div>
                 )}
                 <div className="text-right min-w-[80px]">
                     <div className="text-sm font-medium text-white">
@@ -517,12 +529,12 @@ const TeamPage = () => {
                                 </div>
                             </div>
                 {isCommissioner ? (
-                    <button
-                        onClick={() => setShowPlayerSelection(true)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow-lg"
-                    >
-                        Add Player
-                    </button>
+                <button
+                    onClick={() => setShowPlayerSelection(true)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow-lg"
+                >
+                    Add Player
+                </button>
                 ) : (
                     <p className="text-gray-400 italic">Commissioner login required to manage roster</p>
                 )}
@@ -539,7 +551,7 @@ const TeamPage = () => {
                         </div>
                         <div className="mt-4 sm:mt-0">
                             <button
-                                onClick={() => fetchRealStats(currentWeek, nflSeasonYear)}
+                                onClick={() => fetchRealStats(currentWeek, nflSeasonYear, seasonType)}
                                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-300 bg-blue-900/20 hover:bg-blue-900/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors border border-blue-700/50"
                             >
                                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -569,7 +581,7 @@ const TeamPage = () => {
                                     .sort((a, b) => a.week - b.week)
                                     .map(week => (
                                         <option key={`${week.year}-${week.week}`} value={week.week}>
-                                            Week {week.week}
+                                            {getWeekDisplayName(week.week, seasonType)}
                                         </option>
                                     ))}
                             </select>
@@ -842,6 +854,7 @@ const TeamPage = () => {
                 onClose={() => setShowPlayerStatsModal(false)}
                 week={currentWeek}
                 year={nflSeasonYear}
+                seasonType={seasonType}
             />
         </div>
     );

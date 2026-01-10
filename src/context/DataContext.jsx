@@ -67,7 +67,7 @@ export function DataProvider({ children }) {
     };
     
     // Basic function to create a new league
-    const createLeague = async (name, commissioner, commissionerEmail, password, year) => {
+    const createLeague = async (name, commissioner, commissionerEmail, password, year, season_type = 'regular') => {
         try {
             // Validate inputs
             if (!name || !commissioner || !commissionerEmail) {
@@ -83,7 +83,7 @@ export function DataProvider({ children }) {
             }
             
             console.log('🏈 Creating league via API:', { name, commissioner, commissionerEmail, password: '[HIDDEN]', year });
-
+            
             // Create league via backend API - backend will generate the ID
             const response = await fetch(`${API_URL}/api/leagues`, {
                 method: 'POST',
@@ -95,7 +95,8 @@ export function DataProvider({ children }) {
                     commissioner,
                     commissionerEmail,
                     password,
-                    year: year || currentYear
+                    year: year || currentYear,
+                    season_type: season_type || 'regular'
                 })
             });
             
@@ -257,17 +258,41 @@ export function DataProvider({ children }) {
         };
 
         // Function to fetch real playoff stats from backend
-        const fetchRealStats = async (week = 1, year = 2024) => {
+        const fetchRealStats = async (week = 1, year = 2024, seasonType = null) => {
             try {
-                console.log(`🔄 Fetching real stats for week ${week}, year ${year}...`);
-                const response = await fetch(`${API_URL}/api/stats/scoring-ready/${week}?year=${year}`);
+                console.log(`🔄 Fetching real stats for week ${week}, year ${year}, seasonType: ${seasonType || 'all'}...`);
+                let url = `${API_URL}/api/stats/scoring-ready/${week}?year=${year}`;
+                if (seasonType) {
+                    url += `&seasonType=${seasonType}`;
+                }
+                const response = await fetch(url);
+                
+                // Store stats with composite key: week-seasonType (even if empty)
+                const statsKey = seasonType ? `${week}-${seasonType}` : `${week}`;
                 
                 if (!response.ok) {
+                    // If 404 or other error, explicitly cache empty result
+                    // This prevents accidentally using stats from a different season_type
+                    if (response.status === 404) {
+                        console.log(`⚠️ No stats found for week ${week}, seasonType: ${seasonType || 'all'} (404)`);
+                        setRealStats(prev => ({ ...prev, [statsKey]: { players: [], count: 0 } }));
+                        return [];
+                    }
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
                 const data = await response.json();
-                console.log(`✅ Fetched ${data.count} players with real stats:`, data);
+                console.log(`✅ Fetched ${data.count || 0} players with real stats for week ${week}, seasonType: ${seasonType || 'all'}`);
+                
+                // If no stats found for this season_type, explicitly cache empty result
+                // This prevents accidentally using stats from a different season_type
+                if (!data.players || data.players.length === 0) {
+                    console.log(`⚠️ No stats found for week ${week}, seasonType: ${seasonType || 'all'}`);
+                    // Still cache the empty result so we know we've checked
+                    const statsKey = seasonType ? `${week}-${seasonType}` : `${week}`;
+                    setRealStats(prev => ({ ...prev, [statsKey]: { players: [], count: 0 } }));
+                    return [];
+                }
                 
                 // Transform the data to match your existing player structure
                 const transformedPlayers = data.players.map(player => ({
@@ -275,8 +300,9 @@ export function DataProvider({ children }) {
                     stats: player.weeklyStats[week] || {} // Extract the week's stats
                 }));
                 
-                // Don't overwrite the players array - just store the stats
-                setRealStats(prev => ({ ...prev, [week]: data }));
+                // Store stats with composite key (already set above)
+                setRealStats(prev => ({ ...prev, [statsKey]: data }));
+                console.log(`📦 Cached stats with key: "${statsKey}"`);
                 
                 console.log(`🎯 Transformed ${transformedPlayers.length} players for scoring engine`);
                 return transformedPlayers;
@@ -306,22 +332,25 @@ export function DataProvider({ children }) {
         };
 
         // Function to get player with real stats for scoring
-        const getPlayerWithRealStats = (playerId, week = 1) => {
-            console.log(`🔍 getPlayerWithRealStats called with playerId: ${playerId}, week: ${week}`);
+        const getPlayerWithRealStats = (playerId, week = 1, seasonType = null) => {
+            console.log(`🔍 getPlayerWithRealStats called with playerId: ${playerId}, week: ${week}, seasonType: ${seasonType || 'all'}`);
             console.log(`🔍 Available realStats keys:`, Object.keys(realStats));
-            console.log(`🔍 Looking for realStats[${week}]:`, realStats[week]);
             
-            // If we have real stats for this week, use them
-            if (realStats[week] && realStats[week].players) {
-                console.log(`🔍 Found realStats[${week}].players, searching for player ${playerId}`);
-                console.log(`🔍 Total players in realStats[${week}]:`, realStats[week].players.length);
+            // Build stats key using season_type if provided
+            const statsKey = seasonType ? `${week}-${seasonType}` : `${week}`;
+            console.log(`🔍 Looking for realStats[${statsKey}]:`, realStats[statsKey]);
+            
+            // If we have real stats for this week/seasonType, use them
+            if (realStats[statsKey] && realStats[statsKey].players) {
+                console.log(`🔍 Found realStats[${statsKey}].players, searching for player ${playerId}`);
+                console.log(`🔍 Total players in realStats[${statsKey}]:`, realStats[statsKey].players.length);
                 
                 // Log a sample of available players for debugging
                 if (week === 3) {
-                    console.log(`🔍 Week 3 players sample:`, realStats[week].players.slice(0, 3).map(p => ({ id: p.id, name: p.name, position: p.position })));
+                    console.log(`🔍 Week 3 players sample:`, realStats[statsKey].players.slice(0, 3).map(p => ({ id: p.id, name: p.name, position: p.position })));
                 }
                 
-                const realPlayer = realStats[week].players.find(p => p.id === playerId);
+                const realPlayer = realStats[statsKey].players.find(p => p.id === playerId);
                 console.log(`🔍 Real player found:`, realPlayer);
                 
                 if (realPlayer && realPlayer.weeklyStats && realPlayer.weeklyStats[week]) {
@@ -382,14 +411,22 @@ export function DataProvider({ children }) {
                     console.log(`🔍 Attempting name search for player ID ${playerId}`);
                 }
             } else {
-                console.log(`❌ No realStats[${week}] or no players in realStats[${week}]`);
-                if (realStats[week]) {
-                    console.log(`🔍 realStats[${week}] structure:`, realStats[week]);
+                console.log(`❌ No realStats[${statsKey}] or no players in realStats[${statsKey}]`);
+                if (realStats[statsKey]) {
+                    console.log(`🔍 realStats[${statsKey}] structure:`, realStats[statsKey]);
+                }
+                
+                // If season_type was provided and we didn't find stats, log available keys
+                if (seasonType) {
+                    const availableKeys = Object.keys(realStats);
+                    console.log(`⚠️ Stats not found for key "${statsKey}". Available keys:`, availableKeys);
+                    console.log(`⚠️ This means stats for week ${week} with season_type="${seasonType}" have not been fetched yet.`);
                 }
             }
             
-            // Fallback to null if no stats found
-            console.log(`🔄 No stats found for player ${playerId}, returning null`);
+            // Return null if no stats found - don't fall back to other season types
+            // This ensures postseason leagues don't show regular season stats
+            console.log(`🔄 No stats found for player ${playerId} with season_type="${seasonType || 'all'}", returning null`);
             return null;
         };
 

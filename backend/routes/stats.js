@@ -1029,11 +1029,11 @@ router.get('/season-totals/:leagueId', async (req, res) => {
 router.get('/scoring-ready/:week', async (req, res) => {
   try {
     const { week } = req.params;
-    const { year = 2024 } = req.query;
+    const { year = 2024, seasonType } = req.query;
     const db = req.app.locals.db;
     
-    // Get all stats for the specified week with player info
-    const result = await db.query(`
+    // Build query with optional season_type filter
+    let query = `
       SELECT 
         ps.*,
         p.name as player_name,
@@ -1042,8 +1042,20 @@ router.get('/scoring-ready/:week', async (req, res) => {
       FROM player_stats ps
       JOIN players p ON ps.player_id = p.id
       WHERE ps.week = $1 AND ps.year = $2
-      ORDER BY p.position, p.name
-    `, [parseInt(week), parseInt(year)]);
+    `;
+    
+    const params = [parseInt(week), parseInt(year)];
+    
+    // Filter by season_type if provided
+    if (seasonType) {
+      query += ` AND ps.season_type = $3`;
+      params.push(seasonType);
+    }
+    
+    query += ` ORDER BY p.position, p.name`;
+    
+    // Get all stats for the specified week with player info
+    const result = await db.query(query, params);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'No stats found for this week' });

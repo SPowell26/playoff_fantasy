@@ -15,10 +15,12 @@ const CreateLeaguePage = () => {
       
       // Create the league using your DataContext
       const newLeague = await createLeague(
-        leagueData.name, 
-        leagueData.commissioner, 
-        leagueData.commissionerEmail, 
-        leagueData.year
+        leagueData.name,
+        leagueData.commissioner,
+        leagueData.commissionerEmail,
+        leagueData.password,
+        leagueData.year,
+        leagueData.season_type || 'regular'
       );
       
       console.log('✅ League created successfully:', newLeague);

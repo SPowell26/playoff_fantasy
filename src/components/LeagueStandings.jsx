@@ -9,7 +9,9 @@ import API_URL from '../config/api';
 const LeagueStandings = ({ teams, league, currentWeek, currentYear }) => {
   const navigate = useNavigate();
   const { getPlayerWithRealStats } = useData();
-  const { seasonType } = useYearly();
+  const { seasonType: globalSeasonType } = useYearly();
+  // Use league's season_type if available, otherwise fall back to global context
+  const seasonType = league?.season_type || globalSeasonType || 'regular';
   const [seasonTotals, setSeasonTotals] = useState([]);
   const [seasonTotalsLoading, setSeasonTotalsLoading] = useState(false);
 
@@ -23,9 +25,8 @@ const LeagueStandings = ({ teams, league, currentWeek, currentYear }) => {
     const fetchSeasonTotals = async () => {
       try {
         setSeasonTotalsLoading(true);
-        // Use 'regular' for regular season, fallback to seasonType from context
-        // Default to 'regular' if seasonType is null/undefined
-        const seasonTypeParam = seasonType || 'regular';
+        // Use league's season_type (already set above)
+        const seasonTypeParam = seasonType;
         const url = `${API_URL}/api/stats/season-totals/${league.id}?year=${currentYear}&seasonType=${seasonTypeParam}`;
         console.log('🔄 Fetching season totals:', url);
         
@@ -50,7 +51,7 @@ const LeagueStandings = ({ teams, league, currentWeek, currentYear }) => {
     };
 
     fetchSeasonTotals();
-  }, [league?.id, currentYear, seasonType]);
+  }, [league?.id, league?.season_type, currentYear, seasonType]);
 
   // Calculate team scores and rankings using modular utility
   const teamStandings = useMemo(() => {
@@ -65,8 +66,8 @@ const LeagueStandings = ({ teams, league, currentWeek, currentYear }) => {
     if (!teams || teams.length === 0) return [];
 
     try {
-      // Calculate current week scores
-      const currentWeekStandings = calculateLeagueStandings(teams, league, getPlayerWithRealStats, currentWeek);
+      // Calculate current week scores (filtered by league's season_type)
+      const currentWeekStandings = calculateLeagueStandings(teams, league, getPlayerWithRealStats, currentWeek, seasonType);
 
       // Merge with season totals from backend
       return currentWeekStandings.map(team => {

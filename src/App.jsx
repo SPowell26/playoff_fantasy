@@ -15,23 +15,23 @@ function App() {
 
   return (
     <AuthProvider>
-      <YearlyProvider>
-        <DataProvider>
-          <Router>
+    <YearlyProvider>
+      <DataProvider>
+    <Router>
             <Navigation onLoginClick={() => setShowLoginModal(true)} />
             <LoginForm
               isOpen={showLoginModal}
               onClose={() => setShowLoginModal(false)}
             />
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/create-league" element={<CreateLeaguePage />} />
-              <Route path="/league/:leagueId" element={<LeaguePage />} />
-              <Route path="/team/:teamId" element={<TeamPage />} />
-            </Routes>
-          </Router>
-        </DataProvider>
-      </YearlyProvider>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/create-league" element={<CreateLeaguePage />} />
+        <Route path="/league/:leagueId" element={<LeaguePage />} />
+        <Route path="/team/:teamId" element={<TeamPage />} />
+      </Routes>
+    </Router>
+      </DataProvider>
+    </YearlyProvider>
     </AuthProvider>
   );
 }

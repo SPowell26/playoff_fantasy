@@ -7,9 +7,10 @@ import { calculateStartingLineupScore } from './calculations';
  * @param {Object} league - League object with scoring rules
  * @param {Function} getPlayerWithRealStats - Function to get player stats
  * @param {number} currentWeek - Current week number
+ * @param {string} seasonType - Season type (regular, postseason, etc.)
  * @returns {Object} Team with calculated scores and processed players
  */
-export const calculateTeamScoreWithStats = (team, league, getPlayerWithRealStats, currentWeek) => {
+export const calculateTeamScoreWithStats = (team, league, getPlayerWithRealStats, currentWeek, seasonType = null) => {
   if (!team || !team.players || team.players.length === 0) {
     return {
       ...team,
@@ -51,9 +52,9 @@ export const calculateTeamScoreWithStats = (team, league, getPlayerWithRealStats
     pointsAllowed: [10, 7, 4, 1, 0, -1, -4, -7, -10]
   };
 
-  // Get real stats for each player
+  // Get real stats for each player (filtered by season_type)
   const playersWithStats = team.players.map(player => {
-    const playerWithStats = getPlayerWithRealStats(player.player_id, currentWeek);
+    const playerWithStats = getPlayerWithRealStats(player.player_id, currentWeek, seasonType);
     if (playerWithStats) {
       return {
         ...player,
@@ -96,12 +97,12 @@ export const calculateTeamScoreWithStats = (team, league, getPlayerWithRealStats
  * @param {number} currentWeek - Current week number
  * @returns {Array} Teams with calculated scores, sorted by total score
  */
-export const calculateLeagueStandings = (teams, league, getPlayerWithRealStats, currentWeek) => {
+export const calculateLeagueStandings = (teams, league, getPlayerWithRealStats, currentWeek, seasonType = null) => {
   if (!teams || teams.length === 0) return [];
 
-  // Calculate scores for each team
+  // Calculate scores for each team (filtered by season_type)
   const teamsWithScores = teams.map(team => 
-    calculateTeamScoreWithStats(team, league, getPlayerWithRealStats, currentWeek)
+    calculateTeamScoreWithStats(team, league, getPlayerWithRealStats, currentWeek, seasonType)
   );
 
   // Sort by total score (descending) and add rankings

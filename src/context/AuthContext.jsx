@@ -8,6 +8,7 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentCommissioner, setCurrentCommissioner] = useState(null);
+  const [isMaster, setIsMaster] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Check authentication status on app load
@@ -28,14 +29,17 @@ export function AuthProvider({ children }) {
         const data = await response.json();
         setIsAuthenticated(data.authenticated);
         setCurrentCommissioner(data.commissioner);
+        setIsMaster(data.isMaster || false);
       } else {
         setIsAuthenticated(false);
         setCurrentCommissioner(null);
+        setIsMaster(false);
       }
     } catch (error) {
       console.error('Failed to check auth status:', error);
       setIsAuthenticated(false);
       setCurrentCommissioner(null);
+      setIsMaster(false);
     } finally {
       setIsLoading(false);
     }
@@ -63,6 +67,9 @@ export function AuthProvider({ children }) {
       if (response.ok && data.success) {
         setIsAuthenticated(true);
         setCurrentCommissioner(data.commissioner);
+        // Check both data.isMaster and data.commissioner.isMaster
+        const masterStatus = data.isMaster || data.commissioner?.isMaster || false;
+        setIsMaster(masterStatus);
         return { success: true };
       } else {
         return {
@@ -95,6 +102,7 @@ export function AuthProvider({ children }) {
     // Always clear local state
     setIsAuthenticated(false);
     setCurrentCommissioner(null);
+    setIsMaster(false);
   };
 
   /**
@@ -114,7 +122,8 @@ export function AuthProvider({ children }) {
 
       if (response.ok) {
         const data = await response.json();
-        return data.isCommissioner;
+        // Master accounts always return true, or use the API response
+        return data.isMaster || data.isCommissioner;
       }
     } catch (error) {
       console.error('Failed to check commissioner status:', error);
@@ -127,11 +136,22 @@ export function AuthProvider({ children }) {
    * Get commissioner status for current league context
    * This is a convenience method for components that need to know if the current user
    * is the commissioner for the league they're viewing
+   * Master accounts have access to all leagues
    * @param {string|number} leagueId - League ID
    * @returns {boolean}
    */
   const isCommissionerForLeague = (leagueId) => {
-    if (!isAuthenticated || !currentCommissioner || !leagueId) {
+    if (!isAuthenticated || !leagueId) {
+      return false;
+    }
+
+    // Master accounts have access to all leagues
+    if (isMaster) {
+      return true;
+    }
+
+    // Regular commissioners need to match league_id
+    if (!currentCommissioner) {
       return false;
     }
 
@@ -141,6 +161,7 @@ export function AuthProvider({ children }) {
   const value = {
     isAuthenticated,
     currentCommissioner,
+    isMaster,
     isLoading,
     login,
     logout,

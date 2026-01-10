@@ -15,7 +15,12 @@ const SYSTEM_API_KEY = process.env.SYSTEM_API_KEY || 'fantasy-system-key-change-
 // Set MASTER_EMAIL environment variable to your email to enable god-mode
 // Example: MASTER_EMAIL=your.email@example.com
 // This gives you full access to all leagues and system operations
-const MASTER_EMAIL = process.env.MASTER_EMAIL;
+// Use a function to read at runtime instead of module load time (ES modules hoist imports)
+function getMasterEmail() {
+  return process.env.MASTER_EMAIL;
+}
+
+// Master email loaded at runtime via getMasterEmail() function
 
 /**
  * Require commissioner authentication for a route
@@ -45,7 +50,8 @@ export function requireCommissioner(leagueIdParam = 'id') {
       const commissionerEmail = req.session.commissioner.email;
 
       // Check if this is a master email (god-mode access)
-      if (MASTER_EMAIL && commissionerEmail === MASTER_EMAIL) {
+      const masterEmail = getMasterEmail();
+      if (masterEmail && commissionerEmail === masterEmail) {
         console.log('👑 Master email access granted - bypassing commissioner checks');
         return next();
       }
@@ -99,7 +105,8 @@ export function requireCommissionerOrSystem(leagueIdParam = 'id') {
       }
 
       // Check for master email (god-mode access)
-      if (req.session && req.session.commissioner && MASTER_EMAIL && req.session.commissioner.email === MASTER_EMAIL) {
+      const masterEmail = getMasterEmail();
+      if (req.session && req.session.commissioner && masterEmail && req.session.commissioner.email === masterEmail) {
         console.log('👑 Master email access granted for system operation');
         return next();
       }
@@ -123,13 +130,19 @@ export function getCurrentCommissioner(req, res) {
   if (!req.session || !req.session.commissioner) {
     return res.json({
       authenticated: false,
-      commissioner: null
+      commissioner: null,
+      isMaster: false
     });
   }
 
+  // Check if this is a master email
+  const masterEmail = getMasterEmail();
+  const isMaster = masterEmail && req.session.commissioner.email === masterEmail;
+
   res.json({
     authenticated: true,
-    commissioner: req.session.commissioner
+    commissioner: req.session.commissioner,
+    isMaster: isMaster
   });
 }
 
@@ -149,12 +162,17 @@ export async function loginCommissioner(req, res) {
 
     const db = req.app.locals.db;
 
-    // Find commissioner by email
+    // Check if this is a master email
+    const masterEmail = getMasterEmail();
+    const isMaster = masterEmail && email === masterEmail;
+
+    // Find commissioner by email (must exist in league_members for password verification)
     const result = await db.query(
       `SELECT lm.*, l.name as league_name, l.id as league_id
        FROM league_members lm
        JOIN leagues l ON lm.league_id = l.id
-       WHERE lm.user_email = $1 AND lm.role = 'commissioner'`,
+       WHERE lm.user_email = $1 AND lm.role = 'commissioner'
+       LIMIT 1`,
       [email]
     );
 
@@ -186,17 +204,23 @@ export async function loginCommissioner(req, res) {
 
     // Create session
     req.session.commissioner = {
-      id: commissioner.id,
-      email: commissioner.user_email,
-      username: commissioner.username,
-      league_id: commissioner.league_id,
-      league_name: commissioner.league_name
+      id: commissioner?.id || null,
+      email: email,
+      username: commissioner?.username || 'Master Commissioner',
+      league_id: commissioner?.league_id || null,
+      league_name: commissioner?.league_name || null,
+      isMaster: isMaster
     };
+
+    if (isMaster) {
+      console.log('👑 Master account login successful:', email);
+    }
 
     res.json({
       success: true,
       message: 'Login successful',
-      commissioner: req.session.commissioner
+      commissioner: req.session.commissioner,
+      isMaster: isMaster
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -251,6 +275,20 @@ export async function checkCommissionerForLeague(req, res) {
 
     const commissionerEmail = req.session.commissioner.email;
 
+    // Check if this is a master email (god-mode access)
+    const masterEmail = getMasterEmail();
+    const isMaster = masterEmail && commissionerEmail === masterEmail;
+    
+    if (isMaster) {
+      // Master accounts have access to all leagues
+      return res.json({
+        isCommissioner: true,
+        leagueId: leagueId,
+        commissioner: req.session.commissioner,
+        isMaster: true
+      });
+    }
+
     // Check if this user is commissioner for this league
     const db = req.app.locals.db;
     const result = await db.query(
@@ -264,7 +302,8 @@ export async function checkCommissionerForLeague(req, res) {
     res.json({
       isCommissioner: result.rows.length > 0,
       leagueId: leagueId,
-      commissioner: result.rows.length > 0 ? req.session.commissioner : null
+      commissioner: result.rows.length > 0 ? req.session.commissioner : null,
+      isMaster: false
     });
   } catch (error) {
     console.error('Check commissioner error:', error);
