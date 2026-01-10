@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import fetch from 'node-fetch';
+// Note: Using global fetch (available in Node 18+)
 
 /**
  * Automated stat pulling scheduler
@@ -29,18 +29,21 @@ export async function fetchAndStoreWeeklySchedule(db, systemApiKey) {
     console.log('📅 [CRON] Fetching weekly game schedule...');
     
     // Get current week from ESPN
-    const scoreboardResponse = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard');
+    // Use global fetch (available in Node 18+)
+    const scoreboardResponse = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard', {
+      signal: AbortSignal.timeout(30000) // 30 second timeout
+    });
     
     if (!scoreboardResponse.ok) {
       console.error('❌ [CRON] Failed to fetch scoreboard:', scoreboardResponse.status);
-      return;
+      throw new Error(`ESPN API returned status ${scoreboardResponse.status}`);
     }
     
     const scoreboardData = await scoreboardResponse.json();
     
     if (!scoreboardData.events || !Array.isArray(scoreboardData.events)) {
       console.log('⚠️ [CRON] No games found for current week');
-      return;
+      throw new Error('No games found for current week');
     }
     
     const week = scoreboardData.week?.number;
@@ -56,12 +59,19 @@ export async function fetchAndStoreWeeklySchedule(db, systemApiKey) {
     console.log(`🏈 [CRON] Found ${scoreboardData.events.length} games`);
     
     // Clear existing schedule for this week
-    await db.query(
-      'DELETE FROM game_schedule WHERE week = $1 AND year = $2 AND season_type = $3',
-      [week, year, seasonType]
+    // Delete by week/year/season_type OR by matching game_ids OR old rows with no game_id for this week
+    const gameIds = scoreboardData.events.map(g => g.id);
+    const deleteResult = await db.query(
+      `DELETE FROM game_schedule 
+       WHERE (week = $1 AND year = $2 AND season_type = $3)
+       OR (week = $1 AND year = $2 AND game_id IS NULL)
+       OR game_id = ANY($4::varchar[])
+       RETURNING id`,
+      [week, year, seasonType, gameIds]
     );
+    console.log(`🗑️ Deleted ${deleteResult.rows.length} existing game schedule entries`);
     
-    // Insert all games for this week
+    // Insert all games for this week using UPSERT (insert or update)
     const gameTimes = [];
     for (const game of scoreboardData.events) {
       const gameDate = new Date(game.date);
@@ -69,11 +79,19 @@ export async function fetchAndStoreWeeklySchedule(db, systemApiKey) {
       const awayTeam = game.competitions?.[0]?.competitors?.find(c => c.homeAway === 'away')?.team?.abbreviation;
       const status = game.status?.type?.name || 'scheduled';
       
+      // Use UPSERT - if unique constraint matches, update; otherwise insert
+      // The unique constraint is on (year, week, season_type, game_id)
       await db.query(
         `INSERT INTO game_schedule (week, year, season_type, game_id, game_name, game_date, home_team, away_team, game_status, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
          ON CONFLICT (year, week, season_type, game_id) 
-         DO UPDATE SET game_date = $6, game_status = $9, updated_at = NOW()`,
+         DO UPDATE SET 
+           game_date = EXCLUDED.game_date,
+           game_name = EXCLUDED.game_name,
+           home_team = EXCLUDED.home_team,
+           away_team = EXCLUDED.away_team,
+           game_status = EXCLUDED.game_status,
+           updated_at = NOW()`,
         [week, year, seasonType, game.id, game.name, gameDate, homeTeam, awayTeam, status]
       );
       
@@ -95,8 +113,17 @@ export async function fetchAndStoreWeeklySchedule(db, systemApiKey) {
     
     console.log(`✅ [CRON] Stored ${scoreboardData.events.length} games for Week ${week}`);
     
+    return {
+      success: true,
+      gamesStored: scoreboardData.events.length,
+      week,
+      year,
+      seasonType
+    };
+    
   } catch (error) {
     console.error('❌ [CRON] Error fetching weekly schedule:', error);
+    throw error; // Re-throw so the API endpoint can handle it
   }
 }
 
