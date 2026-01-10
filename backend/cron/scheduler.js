@@ -71,6 +71,13 @@ export async function fetchAndStoreWeeklySchedule(db, systemApiKey) {
     );
     console.log(`🗑️ Deleted ${deleteResult.rows.length} existing game schedule entries`);
     
+    // Reset the sequence after deletion to avoid ID conflicts
+    // Get the max ID and set sequence to start after it
+    const maxIdResult = await db.query('SELECT COALESCE(MAX(id), 0) as max_id FROM game_schedule');
+    const maxId = maxIdResult.rows[0].max_id || 0;
+    await db.query(`SELECT setval('game_schedule_id_seq', $1, true)`, [maxId]);
+    console.log(`🔄 Reset sequence to start at ${maxId + 1}`);
+    
     // Insert all games for this week using UPSERT (insert or update)
     const gameTimes = [];
     for (const game of scoreboardData.events) {
