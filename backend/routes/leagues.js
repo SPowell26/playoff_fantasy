@@ -109,7 +109,9 @@ router.post('/', async (req, res) => {
               fieldGoals: {
                 zeroToThirtyNinePoints: 3, fortyToFortyNinePoints: 4, fiftyPlusPoints: 5
               },
-              extraPointPoints: 1
+              extraPointPoints: 1,
+              fieldGoalsMissedPoints: -1,  // Penalty for missed field goals
+              extraPointsMissedPoints: -1   // Penalty for missed extra points
             }
           }),
           12, // max_teams
@@ -297,14 +299,29 @@ router.put('/:id', requireCommissioner(), async (req, res) => {
     const { name, commissioner, scoring_rules } = req.body;
     const db = req.app.locals.db;
     
+    // Handle scoring_rules - if it's a string, parse it; if it's an object, stringify it
+    let scoringRulesValue = scoring_rules;
+    if (scoring_rules) {
+      if (typeof scoring_rules === 'string') {
+        try {
+          scoringRulesValue = JSON.parse(scoring_rules);
+        } catch (e) {
+          // If parsing fails, use as-is
+          scoringRulesValue = scoring_rules;
+        }
+      }
+      // Convert to JSON string for database storage
+      scoringRulesValue = JSON.stringify(scoringRulesValue);
+    }
+    
     const result = await db.query(
       `UPDATE leagues 
        SET name = COALESCE($1, name), 
            commissioner = COALESCE($2, commissioner), 
-           scoring_rules = COALESCE($3, scoring_rules),
+           scoring_rules = COALESCE($3::jsonb, scoring_rules),
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $4 RETURNING *`,
-      [name, commissioner, scoring_rules, req.params.id]
+      [name, commissioner, scoringRulesValue, req.params.id]
     );
     
     if (result.rows.length === 0) {

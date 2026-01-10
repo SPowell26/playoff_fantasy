@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import CreateLeaguePage from './pages/CreateLeaguePage';
 import TeamPage from './pages/TeamPage';
 import LeaguePage from './pages/LeaguePage';
+import LeagueSettingsPage from './pages/LeagueSettingsPage';
 
 function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -27,6 +28,7 @@ function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/create-league" element={<CreateLeaguePage />} />
         <Route path="/league/:leagueId" element={<LeaguePage />} />
+        <Route path="/league/:leagueId/settings" element={<LeagueSettingsPage />} />
         <Route path="/team/:teamId" element={<TeamPage />} />
       </Routes>
     </Router>

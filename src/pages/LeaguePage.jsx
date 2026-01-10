@@ -189,7 +189,12 @@ const LeaguePage = () => {
                 >
                   {spamLoading ? '📧 Sending...' : '📧 Spam Members'}
                 </button>
-                <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow-lg">⚙️ League Settings</button>
+                <button 
+                  onClick={() => navigate(`/league/${leagueId}/settings`)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow-lg"
+                >
+                  ⚙️ League Settings
+                </button>
               </div>
             )}
           </div>

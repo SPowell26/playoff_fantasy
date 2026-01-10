@@ -118,9 +118,71 @@ export function DataProvider({ children }) {
         }
     };
 
+    // Function to update a league
+    const updateLeague = async (leagueId, updates) => {
+        try {
+            // Prepare the request body - scoring_rules should be sent as JSON string if it's an object
+            const requestBody = { ...updates };
+            if (updates.scoring_rules && typeof updates.scoring_rules === 'object') {
+                requestBody.scoring_rules = JSON.stringify(updates.scoring_rules);
+            }
+            
+            const response = await fetch(`${API_URL}/api/leagues/${leagueId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify(requestBody)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to update league');
+            }
+            
+            const updatedLeague = await response.json();
+            
+            // Parse scoring_rules if it's a string
+            if (updatedLeague.scoring_rules && typeof updatedLeague.scoring_rules === 'string') {
+                try {
+                    updatedLeague.scoring_rules = JSON.parse(updatedLeague.scoring_rules);
+                } catch (e) {
+                    console.warn('Failed to parse scoring_rules:', e);
+                }
+            }
+            
+            // Update local state
+            setLeagues(leagues.map(league => 
+                league.id === leagueId ? updatedLeague : league
+            ));
+            
+            return updatedLeague;
+        } catch (error) {
+            console.error('Failed to update league:', error);
+            throw error;
+        }
+    };
+    
     // Function to delete a league
-    const deleteLeague = (leagueId) => {
-        setLeagues(leagues.filter(league => league.id !== leagueId));
+    const deleteLeague = async (leagueId) => {
+        try {
+            const response = await fetch(`${API_URL}/api/leagues/${leagueId}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to delete league');
+            }
+            
+            // Update local state
+            setLeagues(leagues.filter(league => league.id !== leagueId));
+        } catch (error) {
+            console.error('Failed to delete league:', error);
+            throw error;
+        }
     };
 
     //Function to create a new team
@@ -442,6 +504,7 @@ export function DataProvider({ children }) {
         players,
         realStats,
         createLeague,
+        updateLeague,
         deleteLeague,
         createTeam,
         addTeamToLeague,
