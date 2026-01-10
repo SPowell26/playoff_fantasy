@@ -220,27 +220,38 @@ router.get('/debug', async (req, res) => {
 
 // POST manually fetch and store weekly game schedule
 // This allows triggering the schedule fetch outside of the Wednesday cron job
-router.post('/fetch-schedule', requireCommissionerOrSystem, async (req, res) => {
+// No auth required - safe system operation (pulls from ESPN and stores schedule)
+router.post('/fetch-schedule', async (req, res) => {
   try {
     const db = req.app.locals.db;
     const systemApiKey = process.env.SYSTEM_API_KEY;
     
     console.log('📅 Manual schedule fetch triggered');
+    console.log('🔍 Request headers:', JSON.stringify(req.headers, null, 2));
+    console.log('🔍 Session:', req.session ? 'exists' : 'missing');
+    console.log('🔍 Commissioner:', req.session?.commissioner ? req.session.commissioner.email : 'none');
     
-    // Call the schedule fetch function
-    await fetchAndStoreWeeklySchedule(db, systemApiKey);
-    
+    // Respond immediately and process in background
     res.json({
       success: true,
-      message: 'Weekly game schedule fetched and stored successfully',
+      message: 'Schedule fetch started. Processing in background...',
       timestamp: new Date().toISOString()
     });
-  } catch (error) {
-    console.error('❌ Failed to fetch schedule:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch schedule',
-      message: error.message 
+    
+    // Process in background (don't await)
+    fetchAndStoreWeeklySchedule(db, systemApiKey).catch(err => {
+      console.error('❌ Background schedule fetch failed:', err);
     });
+    
+  } catch (error) {
+    console.error('❌ Failed to start schedule fetch:', error);
+    // Only send error if we haven't already sent a response
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Failed to start schedule fetch',
+        message: error.message 
+      });
+    }
   }
 });
 

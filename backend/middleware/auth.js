@@ -103,9 +103,35 @@ export function requireCommissioner(leagueIdParam = 'id') {
  * Allows either commissioner login OR system API key (for cron jobs, etc.)
  * @param {string} leagueIdParam - The parameter name containing the league ID (default: 'id')
  */
-export function requireCommissionerOrSystem(leagueIdParam = 'id') {
+export function requireCommissionerOrSystem(leagueIdParam) {
+  // If no leagueIdParam provided, this is a system endpoint
+  const isSystemEndpoint = leagueIdParam === undefined || leagueIdParam === null;
+  
   return async (req, res, next) => {
     try {
+      // Debug logging for system endpoints
+      if (isSystemEndpoint) {
+        console.log('🔍 System endpoint auth check:', {
+          hasSession: !!req.session,
+          hasCommissioner: !!(req.session && req.session.commissioner),
+          sessionId: req.session?.id,
+          sessionID: req.sessionID,
+          commissionerEmail: req.session?.commissioner?.email,
+          cookies: req.headers.cookie ? 'present' : 'missing',
+          cookieHeader: req.headers.cookie?.substring(0, 50) || 'none'
+        });
+        
+        // Try to reload session manually if it exists but has no data
+        if (req.session && !req.session.commissioner && req.sessionID) {
+          console.log('⚠️ Session exists but has no commissioner data, attempting reload...');
+          await new Promise((resolve) => req.session.reload(resolve));
+          console.log('🔍 After reload:', {
+            hasCommissioner: !!(req.session && req.session.commissioner),
+            commissionerEmail: req.session?.commissioner?.email
+          });
+        }
+      }
+      
       // Check for system API key first (for automated processes)
       const apiKey = req.headers['x-system-api-key'] || req.headers['system-api-key'];
       if (apiKey && apiKey === SYSTEM_API_KEY) {
@@ -114,15 +140,39 @@ export function requireCommissionerOrSystem(leagueIdParam = 'id') {
         return next();
       }
 
-      // Check for master email (god-mode access)
+      // Check for master email (god-mode access) - check session first
       const masterEmail = getMasterEmail();
       if (req.session && req.session.commissioner && masterEmail && req.session.commissioner.email === masterEmail) {
-        console.log('👑 Master email access granted for system operation');
+        console.log('👑 Master email access granted for system operation:', req.session.commissioner.email);
         return next();
       }
 
-      // If no valid system API key or master email, check for commissioner authentication
-      return requireCommissioner(leagueIdParam)(req, res, next);
+      // For system endpoints (no league required), only master or system API key allowed
+      if (isSystemEndpoint) {
+        if (!req.session || !req.session.commissioner) {
+          console.log('⚠️ System endpoint: No session or commissioner data');
+          return res.status(401).json({
+            error: 'Authentication required. Please log in as a master account.',
+            code: 'AUTH_REQUIRED'
+          });
+        }
+        
+        if (masterEmail && req.session.commissioner.email === masterEmail) {
+          console.log('👑 Master email access granted for system operation:', req.session.commissioner.email);
+          return next();
+        }
+        
+        console.log('⚠️ System endpoint: User is authenticated but not master');
+        return res.status(403).json({
+          error: 'Master account required for this operation.',
+          code: 'MASTER_REQUIRED',
+          isAuthenticated: true,
+          isMaster: false
+        });
+      }
+      
+      // League-specific endpoint - check commissioner authentication (default to 'id' if not provided)
+      return requireCommissioner(leagueIdParam || 'id')(req, res, next);
     } catch (error) {
       console.error('Authentication middleware error:', error);
       res.status(500).json({
