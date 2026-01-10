@@ -56,7 +56,7 @@ async function fetchAndStoreWeeklySchedule(db, systemApiKey) {
     
     // Clear existing schedule for this week
     await db.query(
-      'DELETE FROM game_schedules WHERE week = $1 AND year = $2 AND season_type = $3',
+      'DELETE FROM game_schedule WHERE week = $1 AND year = $2 AND season_type = $3',
       [week, year, seasonType]
     );
     
@@ -69,10 +69,10 @@ async function fetchAndStoreWeeklySchedule(db, systemApiKey) {
       const status = game.status?.type?.name || 'scheduled';
       
       await db.query(
-        `INSERT INTO game_schedules (week, year, season_type, game_id, game_name, game_date, home_team, away_team, status, updated_at)
+        `INSERT INTO game_schedule (week, year, season_type, game_id, game_name, game_date, home_team, away_team, game_status, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-         ON CONFLICT (week, year, season_type, game_id) 
-         DO UPDATE SET game_date = $6, status = $9, updated_at = NOW()`,
+         ON CONFLICT (year, week, season_type, game_id) 
+         DO UPDATE SET game_date = $6, game_status = $9, updated_at = NOW()`,
         [week, year, seasonType, game.id, game.name, gameDate, homeTeam, awayTeam, status]
       );
       
@@ -148,7 +148,7 @@ async function isInGameTimeWindow(db) {
     
     // Get all games for this week
     const result = await db.query(
-      `SELECT game_date FROM game_schedules 
+      `SELECT game_date FROM game_schedule 
        WHERE game_date >= NOW() - INTERVAL '6 hours' 
        AND game_date <= NOW() + INTERVAL '6 hours'
        ORDER BY game_date ASC`
