@@ -206,6 +206,7 @@ async function isInGameTimeWindow(db) {
  * Initialize and start all cron jobs
  */
 export function startCronJobs(db, systemApiKey) {
+  const port = process.env.PORT || 8080;
   console.log('🚀 [CRON] Starting automated stat pulling scheduler...');
   
   // Cron job: Fetch weekly schedule on Wednesday at 10 AM ET (2 PM UTC)
