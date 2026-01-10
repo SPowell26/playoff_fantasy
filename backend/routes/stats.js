@@ -443,8 +443,8 @@ router.post('/import-playoff', requireCommissionerOrSystem, async (req, res) => 
             fumbles_lost, sacks, interceptions_defense, fumble_recoveries, safeties,
             blocked_kicks, punt_return_touchdowns, kickoff_return_touchdowns,
             points_allowed, field_goals_0_39, field_goals_40_49, field_goals_50_plus,
-            extra_points
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+            field_goals_missed, extra_points, extra_points_missed
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
           ON CONFLICT (player_id, week, year, season_type) DO UPDATE SET
             passing_yards = EXCLUDED.passing_yards,
             passing_touchdowns = EXCLUDED.passing_touchdowns,
@@ -466,7 +466,9 @@ router.post('/import-playoff', requireCommissionerOrSystem, async (req, res) => 
             field_goals_0_39 = EXCLUDED.field_goals_0_39,
             field_goals_40_49 = EXCLUDED.field_goals_40_49,
             field_goals_50_plus = EXCLUDED.field_goals_50_plus,
+            field_goals_missed = EXCLUDED.field_goals_missed,
             extra_points = EXCLUDED.extra_points,
+            extra_points_missed = EXCLUDED.extra_points_missed,
             updated_at = CURRENT_TIMESTAMP`,
           [
             stat.player_id, stat.week, stat.year, stat.season_type, stat.passing_yards, stat.passing_touchdowns, stat.interceptions,
@@ -474,7 +476,7 @@ router.post('/import-playoff', requireCommissionerOrSystem, async (req, res) => 
             stat.fumbles_lost, stat.sacks, stat.interceptions_defense, stat.fumble_recoveries, stat.safeties,
             stat.blocked_kicks, stat.punt_return_touchdowns, stat.kickoff_return_touchdowns,
             stat.points_allowed, stat.field_goals_0_39, stat.field_goals_40_49, stat.field_goals_50_plus,
-            stat.extra_points
+            stat.field_goals_missed || 0, stat.extra_points, stat.extra_points_missed || 0
           ]
         );
         insertedCount++;
@@ -671,7 +673,7 @@ router.post('/weekly-update', requireCommissionerOrSystem, async (req, res) => {
                   fumble_recoveries: 0, safeties: 0, blocked_kicks: 0,
                   punt_return_touchdowns: 0, kickoff_return_touchdowns: 0,
                   points_allowed: 0, field_goals_0_39: 0, field_goals_40_49: 0,
-                  field_goals_50_plus: 0, extra_points: 0
+                  field_goals_50_plus: 0, field_goals_missed: 0, extra_points: 0, extra_points_missed: 0
                 };
                 allPlayerStats.push(existingPlayerStat);
               }
@@ -797,8 +799,8 @@ router.post('/weekly-update', requireCommissionerOrSystem, async (req, res) => {
             fumbles_lost, sacks, interceptions_defense, fumble_recoveries, safeties,
             blocked_kicks, punt_return_touchdowns, kickoff_return_touchdowns,
             points_allowed, field_goals_0_39, field_goals_40_49, field_goals_50_plus,
-            extra_points
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+            field_goals_missed, extra_points, extra_points_missed
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
           ON CONFLICT (player_id, week, year, season_type) DO UPDATE SET
             passing_yards = EXCLUDED.passing_yards,
             passing_touchdowns = EXCLUDED.passing_touchdowns,
@@ -820,7 +822,9 @@ router.post('/weekly-update', requireCommissionerOrSystem, async (req, res) => {
             field_goals_0_39 = EXCLUDED.field_goals_0_39,
             field_goals_40_49 = EXCLUDED.field_goals_40_49,
             field_goals_50_plus = EXCLUDED.field_goals_50_plus,
+            field_goals_missed = EXCLUDED.field_goals_missed,
             extra_points = EXCLUDED.extra_points,
+            extra_points_missed = EXCLUDED.extra_points_missed,
             updated_at = CURRENT_TIMESTAMP
           RETURNING (xmax = 0)`,
           [
@@ -829,7 +833,7 @@ router.post('/weekly-update', requireCommissionerOrSystem, async (req, res) => {
             stat.fumbles_lost, stat.sacks, stat.interceptions_defense, stat.fumble_recoveries, stat.safeties,
             stat.blocked_kicks, stat.punt_return_touchdowns, stat.kickoff_return_touchdowns,
             stat.points_allowed, stat.field_goals_0_39, stat.field_goals_40_49, stat.field_goals_50_plus,
-            stat.extra_points
+            stat.field_goals_missed || 0, stat.extra_points, stat.extra_points_missed || 0
           ]
         );
         
@@ -1086,7 +1090,8 @@ router.get('/scoring-ready/:week', async (req, res) => {
           fieldGoals50_plus: stat.field_goals_50_plus || 0,
           fieldGoalsMade: (stat.field_goals_0_39 || 0) + (stat.field_goals_40_49 || 0) + (stat.field_goals_50_plus || 0),
           extraPointsMade: stat.extra_points || 0,
-          fieldGoalsMissed: 0, // Not tracked in current import
+          fieldGoalsMissed: stat.field_goals_missed || 0,
+          extraPointsMissed: stat.extra_points_missed || 0,
           
           // Defense stats
           sacks: stat.sacks || 0,
@@ -1562,8 +1567,8 @@ router.post('/import-week', requireCommissionerOrSystem, async (req, res) => {
             fumbles_lost, sacks, interceptions_defense, fumble_recoveries, safeties,
             blocked_kicks, punt_return_touchdowns, kickoff_return_touchdowns,
             points_allowed, field_goals_0_39, field_goals_40_49, field_goals_50_plus,
-            extra_points
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+            field_goals_missed, extra_points, extra_points_missed
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
           ON CONFLICT (player_id, week, year, season_type) DO UPDATE SET
             passing_yards = EXCLUDED.passing_yards,
             passing_touchdowns = EXCLUDED.passing_touchdowns,
@@ -1585,7 +1590,9 @@ router.post('/import-week', requireCommissionerOrSystem, async (req, res) => {
             field_goals_0_39 = EXCLUDED.field_goals_0_39,
             field_goals_40_49 = EXCLUDED.field_goals_40_49,
             field_goals_50_plus = EXCLUDED.field_goals_50_plus,
+            field_goals_missed = EXCLUDED.field_goals_missed,
             extra_points = EXCLUDED.extra_points,
+            extra_points_missed = EXCLUDED.extra_points_missed,
             updated_at = CURRENT_TIMESTAMP`,
           [
             stat.player_id, stat.week, stat.year, stat.season_type,
@@ -1596,7 +1603,7 @@ router.post('/import-week', requireCommissionerOrSystem, async (req, res) => {
             stat.safeties, stat.blocked_kicks, stat.punt_return_touchdowns,
             stat.kickoff_return_touchdowns, stat.points_allowed,
             stat.field_goals_0_39, stat.field_goals_40_49, stat.field_goals_50_plus,
-            stat.extra_points
+            stat.field_goals_missed || 0, stat.extra_points, stat.extra_points_missed || 0
           ]
         );
         
@@ -1714,7 +1721,7 @@ function mapESPNStatsToDatabase(statCategory, stats, fieldGoalDistances, playerN
     fumble_recoveries: 0, safeties: 0, blocked_kicks: 0,
     punt_return_touchdowns: 0, kickoff_return_touchdowns: 0,
     points_allowed: 0, field_goals_0_39: 0, field_goals_40_49: 0,
-    field_goals_50_plus: 0, extra_points: 0
+    field_goals_50_plus: 0, field_goals_missed: 0, extra_points: 0, extra_points_missed: 0
   };
   
   // ESPN now provides stats as arrays with specific meanings for each category
@@ -1771,11 +1778,25 @@ function mapESPNStatsToDatabase(statCategory, stats, fieldGoalDistances, playerN
       console.log(`  🦵 Kicking stats - Raw:`, stats);
       // ESPN kicking format: [field_goals_made/attempts, percentage, long_field_goal, extra_points_made/attempts, total_points]
       if (Array.isArray(stats) && stats.length >= 4) {
-        // Parse extra points (format: "2/2")
+        // Parse field goals (format: "2/3" means 2 made, 3 attempted)
+        const fieldGoalsStr = stats[0];
+        let fgMade = 0;
+        let fgAttempted = 0;
+        if (fieldGoalsStr && fieldGoalsStr.includes('/')) {
+          const parts = fieldGoalsStr.split('/');
+          fgMade = parseInt(parts[0]) || 0;
+          fgAttempted = parseInt(parts[1]) || 0;
+          mappedStats.field_goals_missed = Math.max(0, fgAttempted - fgMade);
+        }
+        
+        // Parse extra points (format: "2/2" means 2 made, 2 attempted)
         const extraPointsStr = stats[3];
         if (extraPointsStr && extraPointsStr.includes('/')) {
-          const made = extraPointsStr.split('/')[0];
-          mappedStats.extra_points = parseInt(made) || 0;
+          const parts = extraPointsStr.split('/');
+          const xpMade = parseInt(parts[0]) || 0;
+          const xpAttempted = parseInt(parts[1]) || 0;
+          mappedStats.extra_points = xpMade;
+          mappedStats.extra_points_missed = Math.max(0, xpAttempted - xpMade);
         }
         
         // Parse field goal distances from scoring plays
@@ -1792,6 +1813,14 @@ function mapESPNStatsToDatabase(statCategory, stats, fieldGoalDistances, playerN
             }
           });
           console.log(`    🦵 Mapped FG stats: 0-39: ${mappedStats.field_goals_0_39 || 0}, 40-49: ${mappedStats.field_goals_40_49 || 0}, 50+: ${mappedStats.field_goals_50_plus || 0}`);
+          
+          // Verify: total made from distances should match fgMade from ESPN
+          const totalFgMadeFromDistances = (mappedStats.field_goals_0_39 || 0) + (mappedStats.field_goals_40_49 || 0) + (mappedStats.field_goals_50_plus || 0);
+          if (fgMade > 0 && totalFgMadeFromDistances !== fgMade) {
+            console.log(`    ⚠️ FG mismatch: ESPN says ${fgMade} made, but distances show ${totalFgMadeFromDistances} made`);
+            // If distances don't match, recalculate misses based on what ESPN says
+            mappedStats.field_goals_missed = Math.max(0, fgAttempted - fgMade);
+          }
         } else if (stats[2] && stats[2] !== '100.0') {
           // Fallback to long field goal if no scoring plays data
           const fgDistance = parseInt(stats[2]);
@@ -1800,8 +1829,9 @@ function mapESPNStatsToDatabase(statCategory, stats, fieldGoalDistances, playerN
             else if (fgDistance <= 49) mappedStats.field_goals_40_49 = 1;
             else mappedStats.field_goals_50_plus = 1;
           }
+          // If we're using fallback, we still have the missed count from parsing stats[0]
         }
-        console.log(`    📊 FG: ${stats[0]}, PCT: ${stats[1]}, Long: ${stats[2]}, XP: ${stats[3]}, Total: ${stats[4]}`);
+        console.log(`    📊 FG: ${stats[0]} (${fgMade} made, ${mappedStats.field_goals_missed || 0} missed), PCT: ${stats[1]}, Long: ${stats[2]}, XP: ${stats[3]} (${mappedStats.extra_points_missed || 0} missed), Total: ${stats[4]}`);
       }
       break;
     case 'punting':

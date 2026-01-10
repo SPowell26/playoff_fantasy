@@ -381,6 +381,7 @@ export function DataProvider({ children }) {
                         fieldGoalsMade: rawStats.fieldGoalsMade || 0,
                         extraPointsMade: rawStats.extraPointsMade || 0,
                         fieldGoalsMissed: rawStats.fieldGoalsMissed || 0,
+                        extraPointsMissed: rawStats.extraPointsMissed || 0,
                         // Defense stats
                         sacks: rawStats.sacks || 0,
                         interceptions: rawStats.interceptions || 0,
