@@ -1093,9 +1093,18 @@ router.get('/scoring-ready/:week', async (req, res) => {
           interceptions: stat.interceptions_defense || 0,
           fumbleRecoveries: stat.fumble_recoveries || 0,
           safeties: stat.safeties || 0,
+          blockedKicks: stat.blocked_kicks || 0,
+          puntReturnTD: stat.punt_return_touchdowns || 0,
+          kickoffReturnTD: stat.kickoff_return_touchdowns || 0,
+          defensiveTDs: 0, // Calculated separately or combined with return TDs - not stored as separate field
           
           // Points allowed (for team defense)
           pointsAllowed: stat.points_allowed || 0,
+          
+          // Team win (for D/ST) - preserve boolean value correctly
+          // Handle null, undefined, false, 0 as false, but preserve true/1/'true' as true
+          teamWin: stat.team_win === true || stat.team_win === 1 || stat.team_win === 'true',
+          team_win: stat.team_win === true || stat.team_win === 1 || stat.team_win === 'true', // Also include with underscore for compatibility
           
           // Raw database stats for debugging
           rawStats: {

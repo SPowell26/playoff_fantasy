@@ -243,6 +243,22 @@ const TeamPage = () => {
         scoringRules = scoringRules.offensive;
     }
     
+    // Flatten nested structure and extract PPR
+    if (scoringRules.passing) {
+        scoringRules = {
+            passingYards: scoringRules.passing.yardsPerPoint || 0.04,
+            passingTD: scoringRules.passing.touchdownPoints || 4,
+            interceptions: scoringRules.passing.interceptionPoints || -2,
+            rushingYards: scoringRules.rushing?.yardsPerPoint || 0.1,
+            rushingTD: scoringRules.rushing?.touchdownPoints || 6,
+            receivingYards: scoringRules.receiving?.yardsPerPoint || 0.1,
+            receivingTD: scoringRules.receiving?.touchdownPoints || 6,
+            PPR: scoringRules.receptionPoints || 1,  // Points per reception
+            receptionPoints: scoringRules.receptionPoints || 1,  // Also include for compatibility
+            fumbles: scoringRules.fumbles?.lostPoints || -2
+        };
+    }
+    
     // Fallback to default rules if not found
     if (!scoringRules.passingYards) {
         scoringRules = {
@@ -253,6 +269,8 @@ const TeamPage = () => {
             rushingTD: 6,
             receivingYards: 0.1,
             receivingTD: 6,
+            PPR: 1,
+            receptionPoints: 1,
             fumbles: -2
         };
     }
@@ -261,12 +279,14 @@ const TeamPage = () => {
     scoringRules = {
         ...scoringRules,
         sacks: 1,
-        fumbleRecoveries: 2,
+        interceptions: 2, // For D/ST interceptions
+        fumbleRecoveries: 1, // Fixed: 1 point, not 2
         safeties: 2,
         blockedKicks: 2,
         puntReturnTD: 6,
         kickoffReturnTD: 6,
-        pointsAllowed: [10, 7, 4, 1, 0, -1, -4, -7, -10] // 0, 1-6, 7-13, 14-17, 18-21, 22-27, 28-34, 35-45, 46+
+        teamWinPoints: 6, // 6 points for team win
+        pointsAllowed: [10, 7, 4, 1, 0, -1, -4] // Correct ranges: 0, 1-6, 7-13, 14-20, 21-27, 28-34, 35+
     };
     
     console.log('🔍 Final scoring rules:', scoringRules);
@@ -291,7 +311,7 @@ const TeamPage = () => {
                     const dstScoringRules = {
                         sacks: 1,
                         interceptions: 2,
-                        fumbleRecoveries: 2,
+                        fumbleRecoveries: 1, // Fixed: should be 1 point, not 2
                         defensiveTDs: 6,
                         safeties: 2,
                         blockedKicks: 2,
@@ -320,6 +340,7 @@ const TeamPage = () => {
                     const puntReturnTDs = playerWithStats.stats?.puntReturnTD || 0;
                     const kickoffReturnTDs = playerWithStats.stats?.kickoffReturnTD || 0;
                     const pointsAllowed = playerWithStats.stats?.pointsAllowed || 0;
+                    const teamWin = playerWithStats.stats?.teamWin || playerWithStats.stats?.team_win || false;
                     
                     // Debug: Show all D/ST related stats
                     console.log('   Raw D/ST stats from API:');
@@ -331,6 +352,7 @@ const TeamPage = () => {
                     console.log('     puntReturnTDs:', playerWithStats.stats?.puntReturnTD);
                     console.log('     kickoffReturnTDs:', playerWithStats.stats?.kickoffReturnTD);
                     console.log('     pointsAllowed:', playerWithStats.stats?.pointsAllowed);
+                    console.log('     teamWin:', teamWin);
                     
                     // Log individual calculations
                     console.log(`   sacks: ${sacks} × ${dstScoringRules.sacks} = ${sacks * dstScoringRules.sacks}`);
@@ -357,6 +379,14 @@ const TeamPage = () => {
                     totalPoints += puntReturnTDs * dstScoringRules.puntReturnTDs;
                     totalPoints += kickoffReturnTDs * dstScoringRules.kickoffReturnTDs;
                     totalPoints += pointsAllowedScore;
+                    
+                    // Team win bonus (6 points if team won)
+                    if (teamWin) {
+                        totalPoints += 6;
+                        console.log(`   teamWin: Yes = +6 points`);
+                    } else {
+                        console.log(`   teamWin: No = 0 points`);
+                    }
                     
                     console.log(`   Total D/ST Points: ${totalPoints.toFixed(2)}`);
                 }

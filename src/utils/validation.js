@@ -142,6 +142,7 @@ export function sanitizeScoringRules(rules) {
       passing: { yardsPerPoint: 0.04, touchdownPoints: 4, interceptionPoints: -2 },
       rushing: { yardsPerPoint: 0.1, touchdownPoints: 6 },
       receiving: { yardsPerPoint: 0.1, touchdownPoints: 6 },
+      receptionPoints: 1,  // Points per reception (PPR)
       fumbles: { lostPoints: -2 }
     },
     defensive: {
@@ -155,7 +156,7 @@ export function sanitizeScoringRules(rules) {
         fourteenToTwentyPoints: 1, twentyOneToTwentySevenPoints: 0,
         twentyEightToThirtyFourPoints: -1, thirtyFivePlusPoints: -4
       },
-      teamWinPoints: 5
+      teamWinPoints: 6
     },
     kicker: {
       fieldGoals: {

@@ -50,6 +50,7 @@ const LEAGUE_RULES = {
         yardsPerPoint: 0.1,         // 1 point per 10 yards (1/10 = 0.1)
         touchdownPoints: 6          // 6 points per receiving TD
       },
+      receptionPoints: 1,           // Points per reception (PPR)
       fumbles: {
         lostPoints: -2              // -2 points per fumble lost
       }
@@ -75,7 +76,7 @@ const LEAGUE_RULES = {
         twentyEightToThirtyFourPoints: -1, // -1 point for 28-34 points allowed
         thirtyFivePlusPoints: -4    // -4 points for 35+ points allowed
       },
-      teamWinPoints: 5              // 5 points for team win
+      teamWinPoints: 6              // 6 points for team win
     },
 
     // Kicker Scoring

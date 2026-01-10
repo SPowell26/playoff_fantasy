@@ -7,17 +7,16 @@
  * @returns {number} Fantasy points for points allowed
  */
 const getPointsAllowedScore = (pointsAllowed, scoringRules) => {
-  const pointsAllowedRules = scoringRules.pointsAllowed || [10, 7, 4, 1, 0, -1, -4, -7, -10];
+  // Use correct ranges: 0, 1-6, 7-13, 14-20, 21-27, 28-34, 35+
+  const pointsAllowedRules = scoringRules.pointsAllowed || [10, 7, 4, 1, 0, -1, -4];
   
   if (pointsAllowed === 0) return pointsAllowedRules[0];
   else if (pointsAllowed <= 6) return pointsAllowedRules[1];
   else if (pointsAllowed <= 13) return pointsAllowedRules[2];
-  else if (pointsAllowed <= 17) return pointsAllowedRules[3];
-  else if (pointsAllowed <= 21) return pointsAllowedRules[4];
-  else if (pointsAllowed <= 27) return pointsAllowedRules[5];
-  else if (pointsAllowed <= 34) return pointsAllowedRules[6];
-  else if (pointsAllowed <= 45) return pointsAllowedRules[7];
-  else return pointsAllowedRules[8];
+  else if (pointsAllowed <= 20) return pointsAllowedRules[3];
+  else if (pointsAllowed <= 27) return pointsAllowedRules[4];
+  else if (pointsAllowed <= 34) return pointsAllowedRules[5];
+  else return pointsAllowedRules[6]; // 35+
 };
 
 /**
@@ -37,7 +36,8 @@ export const calculatePlayerScore = (player, scoringRules) => {
     console.log('  Scoring rules:', scoringRules);
     console.log('  rushingYards:', stats.rushingYards, '×', scoringRules.rushingYards, '=', (stats.rushingYards || 0) * (scoringRules.rushingYards || 0));
     console.log('  rushingTD:', stats.rushingTD, '×', scoringRules.rushingTD, '=', (stats.rushingTD || 0) * (scoringRules.rushingTD || 0));
-    console.log('  receptions:', stats.receptions, '× 1 =', (stats.receptions || 0) * 1);
+    const ppr = scoringRules.PPR || scoringRules.receptionPoints || 1;
+    console.log('  receptions:', stats.receptions, '×', ppr, '=', (stats.receptions || 0) * ppr);
   }
   
   // Debug for kickers
@@ -56,15 +56,24 @@ export const calculatePlayerScore = (player, scoringRules) => {
   let totalScore = 0;
   
   // Offensive stats (for all offensive players)
-  totalScore += (stats.passingYards || 0) * (scoringRules.passingYards || 0);
+  const passingYards = stats.passingYards || 0;
+  const rushingYards = stats.rushingYards || 0;
+  const receivingYards = stats.receivingYards || 0;
+  
+  totalScore += passingYards * (scoringRules.passingYards || 0);
   totalScore += (stats.passingTD || 0) * (scoringRules.passingTD || 0);
   totalScore += (stats.interceptions || 0) * (scoringRules.interceptions || 0);
-  totalScore += (stats.rushingYards || 0) * (scoringRules.rushingYards || 0);
+  totalScore += rushingYards * (scoringRules.rushingYards || 0);
   totalScore += (stats.rushingTD || 0) * (scoringRules.rushingTD || 0);
-  totalScore += (stats.receivingYards || 0) * (scoringRules.receivingYards || 0);
+  totalScore += receivingYards * (scoringRules.receivingYards || 0);
   totalScore += (stats.receivingTD || 0) * (scoringRules.receivingTD || 0);
-  totalScore += (stats.receptions || 0) * 1; // 1 point per reception
+  totalScore += (stats.receptions || 0) * (scoringRules.PPR || scoringRules.receptionPoints || 1); // Points per reception
   totalScore += (stats.fumbles || 0) * (scoringRules.fumbles || 0);
+  
+  // Bonus points for milestones (boolean multipliers)
+  if (passingYards >= 300) totalScore += 3; // 3 points for 300+ passing yards
+  if (rushingYards >= 100) totalScore += 3; // 3 points for 100+ rushing yards
+  if (receivingYards >= 100) totalScore += 3; // 3 points for 100+ receiving yards
   
   // Kicker stats (only for kickers)
   if (position === 'K' || position === 'PK') {
@@ -73,22 +82,48 @@ export const calculatePlayerScore = (player, scoringRules) => {
     totalScore += (stats.fieldGoals40_49 || 0) * 4; // 40-49 yard field goals = 4 points  
     totalScore += (stats.fieldGoals50_plus || 0) * 5; // 50+ yard field goals = 5 points
     totalScore += (stats.extraPointsMade || 0) * (scoringRules.extraPointsMade || 1);
-    totalScore += (stats.fieldGoalsMissed || 0) * (scoringRules.fieldGoalsMissed || -1);
+    // Penalties for missed kicks (-1 point each)
+    totalScore += (stats.fieldGoalsMissed || 0) * -1; // -1 point for missed field goal
+    totalScore += (stats.extraPointsMissed || 0) * -1; // -1 point for missed extra point
   }
   
-  // Defense stats (only for D/ST)
+  // Defense stats (only for D/ST players)
   if (position === 'D/ST' || position === 'DEF') {
     totalScore += (stats.sacks || 0) * (scoringRules.sacks || 1);
     totalScore += (stats.interceptions || 0) * (scoringRules.interceptions || 2);
-    totalScore += (stats.fumbleRecoveries || 0) * (scoringRules.fumbleRecoveries || 2);
+    totalScore += (stats.fumbleRecoveries || 0) * (scoringRules.fumbleRecoveries || 1); // Fixed: should be 1 point, not 2
     totalScore += (stats.safeties || 0) * (scoringRules.safeties || 2);
     totalScore += (stats.blockedKicks || 0) * (scoringRules.blockedKicks || 2);
     totalScore += (stats.puntReturnTD || 0) * (scoringRules.puntReturnTD || 6);
     totalScore += (stats.kickoffReturnTD || 0) * (scoringRules.kickoffReturnTD || 6);
-    // Points allowed scoring (for D/ST)
-    if (stats.pointsAllowed !== undefined) {
+    // Defensive TDs (if tracked separately from return TDs)
+    totalScore += (stats.defensiveTDs || 0) * 6; // 6 points for any defensive TD (separate from return TDs)
+    // Points allowed scoring (for D/ST only)
+    if (stats.pointsAllowed !== undefined && stats.pointsAllowed !== null) {
       totalScore += getPointsAllowedScore(stats.pointsAllowed, scoringRules);
     }
+    // Team win bonus (6 points if team won) - only for D/ST
+    // Check for both camelCase and snake_case, handle boolean/truthy values
+    // Must explicitly check for true/1/'true' to avoid counting false/0/'false' as true
+    const teamWin = (stats.teamWin === true || stats.teamWin === 1 || stats.teamWin === 'true') ||
+                    (stats.team_win === true || stats.team_win === 1 || stats.team_win === 'true');
+    if (teamWin) {
+      const teamWinPoints = scoringRules.teamWinPoints || 6;
+      totalScore += teamWinPoints;
+      
+      // Debug logging for D/ST team win
+      console.log(`🏈 D/ST Team Win Bonus: ${player.name || 'Unknown'} (${position}) - teamWin=${stats.teamWin}, team_win=${stats.team_win}, adding ${teamWinPoints} points`);
+    } else {
+      // Debug logging when team win should apply but doesn't
+      if (position === 'D/ST' || position === 'DEF') {
+        console.log(`🏈 D/ST NO Team Win: ${player.name || 'Unknown'} (${position}) - teamWin=${stats.teamWin}, team_win=${stats.team_win}, stats keys:`, Object.keys(stats));
+      }
+    }
+  }
+  // Ensure points_allowed and team_win don't get counted for non-D/ST players
+  // (even if they somehow exist in the stats object)
+  else if (stats.pointsAllowed !== undefined || stats.teamWin !== undefined || stats.team_win !== undefined) {
+    // Do nothing - ignore these stats for non-D/ST players
   }
   
   return totalScore;
@@ -241,43 +276,59 @@ export const calculatePlayerWeeklyScore = (player, scoringRules, week) => {
   let score = 0;
   
   // Offensive stats
-  score += (weeklyStats.passingYards || 0) * scoringRules.passingYards;
+  const passingYards = weeklyStats.passingYards || 0;
+  const rushingYards = weeklyStats.rushingYards || 0;
+  const receivingYards = weeklyStats.receivingYards || 0;
+  
+  score += passingYards * scoringRules.passingYards;
   score += (weeklyStats.passingTD || 0) * scoringRules.passingTD;
   score += (weeklyStats.interceptions || 0) * scoringRules.interceptions;
-  score += (weeklyStats.rushingYards || 0) * scoringRules.rushingYards;
+  score += rushingYards * scoringRules.rushingYards;
   score += (weeklyStats.rushingTD || 0) * scoringRules.rushingTD;
-  score += (weeklyStats.receivingYards || 0) * scoringRules.receivingYards;
+  score += receivingYards * scoringRules.receivingYards;
   score += (weeklyStats.receivingTD || 0) * scoringRules.receivingTD;
+  score += (weeklyStats.receptions || 0) * (scoringRules.PPR || scoringRules.receptionPoints || 1); // Points per reception
   score += (weeklyStats.fumbles || 0) * scoringRules.fumbles;
   
-  // Kicker stats
-  score += (weeklyStats.fieldGoalsMade || 0) * scoringRules.fieldGoalsMade;
-  score += (weeklyStats.extraPointsMade || 0) * scoringRules.extraPointsMade;
-  score += (weeklyStats.fieldGoalsMissed || 0) * scoringRules.fieldGoalsMissed;
+  // Bonus points for milestones (boolean multipliers)
+  if (passingYards >= 300) score += 3; // 3 points for 300+ passing yards
+  if (rushingYards >= 100) score += 3; // 3 points for 100+ rushing yards
+  if (receivingYards >= 100) score += 3; // 3 points for 100+ receiving yards
+  
+  // Kicker stats (only for kickers)
+  if (player.position === 'K' || player.position === 'PK') {
+    score += (weeklyStats.fieldGoals0_39 || 0) * 3;  // 0-39 yard field goals = 3 points
+    score += (weeklyStats.fieldGoals40_49 || 0) * 4; // 40-49 yard field goals = 4 points  
+    score += (weeklyStats.fieldGoals50_plus || 0) * 5; // 50+ yard field goals = 5 points
+    score += (weeklyStats.extraPointsMade || 0) * (scoringRules.extraPointsMade || 1);
+    score += (weeklyStats.fieldGoalsMissed || 0) * -1; // -1 point for missed field goal
+    score += (weeklyStats.extraPointsMissed || 0) * -1; // -1 point for missed extra point
+  }
   
   // Defense stats (only for D/ST)
   if (player.position === 'D/ST' || player.position === 'DEF') {
-    score += (weeklyStats.sacks || 0) * scoringRules.sacks;
-    score += (weeklyStats.interceptions || 0) * scoringRules.interceptions;
-    score += (weeklyStats.fumbleRecoveries || 0) * scoringRules.fumbleRecoveries;
-    score += (weeklyStats.safeties || 0) * scoringRules.safeties;
+    score += (weeklyStats.sacks || 0) * (scoringRules.sacks || 1);
+    score += (weeklyStats.interceptions || 0) * (scoringRules.interceptions || 2);
+    score += (weeklyStats.fumbleRecoveries || 0) * (scoringRules.fumbleRecoveries || 1);
+    score += (weeklyStats.safeties || 0) * (scoringRules.safeties || 2);
+    score += (weeklyStats.blockedKicks || 0) * (scoringRules.blockedKicks || 2);
+    score += (weeklyStats.puntReturnTD || 0) * (scoringRules.puntReturnTD || 6);
+    score += (weeklyStats.kickoffReturnTD || 0) * (scoringRules.kickoffReturnTD || 6);
     
     // Defense points allowed scoring (only for D/ST)
-    if (weeklyStats.pointsAllowed !== undefined && scoringRules.pointsAllowed) {
-      const pointsAllowed = weeklyStats.pointsAllowed;
-      let pointsAllowedScore = 0;
-      
-      if (pointsAllowed === 0) pointsAllowedScore = scoringRules.pointsAllowed[0];
-      else if (pointsAllowed <= 6) pointsAllowedScore = scoringRules.pointsAllowed[1];
-      else if (pointsAllowed <= 13) pointsAllowedScore = scoringRules.pointsAllowed[2];
-      else if (pointsAllowed <= 17) pointsAllowedScore = scoringRules.pointsAllowed[3];
-      else if (pointsAllowed <= 21) pointsAllowedScore = scoringRules.pointsAllowed[4];
-      else if (pointsAllowed <= 27) pointsAllowedScore = scoringRules.pointsAllowed[5];
-      else if (pointsAllowed <= 34) pointsAllowedScore = scoringRules.pointsAllowed[6];
-      else if (pointsAllowed <= 45) pointsAllowedScore = scoringRules.pointsAllowed[7];
-      else pointsAllowedScore = scoringRules.pointsAllowed[8];
-      
-      score += pointsAllowedScore;
+    if (weeklyStats.pointsAllowed !== undefined) {
+      score += getPointsAllowedScore(weeklyStats.pointsAllowed, scoringRules);
+    }
+    
+    // Team win bonus (6 points if team won) - only for D/ST
+    // Check for both camelCase and snake_case, handle boolean/truthy values
+    const teamWin = weeklyStats.teamWin === true || weeklyStats.teamWin === 'true' || 
+                    weeklyStats.team_win === true || weeklyStats.team_win === 'true' ||
+                    weeklyStats.teamWin === 1 || weeklyStats.team_win === 1 ||
+                    Boolean(weeklyStats.teamWin) || Boolean(weeklyStats.team_win);
+    if (teamWin) {
+      const teamWinPoints = scoringRules.teamWinPoints || 6;
+      score += teamWinPoints;
     }
   }
   

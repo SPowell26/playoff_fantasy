@@ -389,7 +389,13 @@ export function DataProvider({ children }) {
                         blockedKicks: rawStats.blockedKicks || 0,
                         puntReturnTD: rawStats.punt_return_touchdowns || 0,
                         kickoffReturnTD: rawStats.kickoff_return_touchdowns || 0,
-                        pointsAllowed: rawStats.pointsAllowed || 0
+                        pointsAllowed: rawStats.pointsAllowed || 0,
+                        // Preserve boolean values correctly - handle true/1/'true' as true, everything else as false
+                        teamWin: rawStats.teamWin === true || rawStats.teamWin === 1 || rawStats.teamWin === 'true' || 
+                                 rawStats.team_win === true || rawStats.team_win === 1 || rawStats.team_win === 'true',
+                        team_win: rawStats.team_win === true || rawStats.team_win === 1 || rawStats.team_win === 'true' ||
+                                  rawStats.teamWin === true || rawStats.teamWin === 1 || rawStats.teamWin === 'true',
+                        extraPointsMissed: rawStats.extraPointsMissed || 0
                     };
                     
                     console.log('🔍 Transformed stats:', transformedStats);

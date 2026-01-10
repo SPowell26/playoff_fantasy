@@ -19,28 +19,50 @@ export function calculatePlayerFantasyPoints(playerStats, position, scoringRules
   switch (position) {
     case 'QB':
       // Passing stats
-      points += (playerStats.passing_yards || 0) * rules.offensive.passing.yardsPerPoint;
+      const passingYards = playerStats.passing_yards || 0;
+      points += passingYards * rules.offensive.passing.yardsPerPoint;
       points += (playerStats.passing_touchdowns || 0) * rules.offensive.passing.touchdownPoints;
       points += (playerStats.interceptions || 0) * rules.offensive.passing.interceptionPoints;
       
+      // Bonus: 3 points for 300+ passing yards
+      if (passingYards >= 300) points += 3;
+      
       // Rushing stats (QBs can rush too)
-      points += (playerStats.rushing_yards || 0) * rules.offensive.rushing.yardsPerPoint;
+      const rushingYards = playerStats.rushing_yards || 0;
+      points += rushingYards * rules.offensive.rushing.yardsPerPoint;
       points += (playerStats.rushing_touchdowns || 0) * rules.offensive.rushing.touchdownPoints;
+      
+      // Bonus: 3 points for 100+ rushing yards
+      if (rushingYards >= 100) points += 3;
       
       // Fumbles
       points += (playerStats.fumbles_lost || 0) * rules.offensive.fumbles.lostPoints;
+      
+      // Receptions (QBs don't typically get receptions, but included for completeness)
+      points += (playerStats.receptions || 0) * (rules.offensive.receptionPoints || 1); // PPR from scoring rules
       break;
 
     case 'RB':
     case 'WR':
     case 'TE':
       // Rushing stats
-      points += (playerStats.rushing_yards || 0) * rules.offensive.rushing.yardsPerPoint;
+      const rbRushingYards = playerStats.rushing_yards || 0;
+      points += rbRushingYards * rules.offensive.rushing.yardsPerPoint;
       points += (playerStats.rushing_touchdowns || 0) * rules.offensive.rushing.touchdownPoints;
       
+      // Bonus: 3 points for 100+ rushing yards
+      if (rbRushingYards >= 100) points += 3;
+      
       // Receiving stats
-      points += (playerStats.receiving_yards || 0) * rules.offensive.receiving.yardsPerPoint;
+      const receivingYards = playerStats.receiving_yards || 0;
+      points += receivingYards * rules.offensive.receiving.yardsPerPoint;
       points += (playerStats.receiving_touchdowns || 0) * rules.offensive.receiving.touchdownPoints;
+      
+      // Bonus: 3 points for 100+ receiving yards
+      if (receivingYards >= 100) points += 3;
+      
+      // Receptions
+      points += (playerStats.receptions || 0) * (rules.offensive.receptionPoints || 1); // PPR from scoring rules
       
       // Fumbles
       points += (playerStats.fumbles_lost || 0) * rules.offensive.fumbles.lostPoints;
@@ -54,6 +76,10 @@ export function calculatePlayerFantasyPoints(playerStats, position, scoringRules
       
       // Extra points
       points += (playerStats.extra_points || 0) * rules.kicker.extraPointPoints;
+      
+      // Penalties for missed kicks (-1 point each)
+      points += (playerStats.field_goals_missed || 0) * -1; // -1 point for missed field goal
+      points += (playerStats.extra_points_missed || 0) * -1; // -1 point for missed extra point
       break;
 
     case 'DEF':
@@ -76,8 +102,8 @@ export function calculatePlayerFantasyPoints(playerStats, position, scoringRules
       else if (pointsAllowed <= 34) points += rules.defensive.pointsAllowed.twentyEightToThirtyFourPoints;
       else points += rules.defensive.pointsAllowed.thirtyFivePlusPoints;
       
-      // Team win
-      if (playerStats.team_win) points += rules.defensive.teamWinPoints;
+      // Team win (6 points if team won)
+      if (playerStats.team_win) points += 6; // 6 points for team win
       break;
   }
 

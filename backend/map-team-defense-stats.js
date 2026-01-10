@@ -287,7 +287,7 @@ function calculateDSTFantasyPoints(dstStats, scoringRules = null) {
       twentyEightToThirtyFourPoints: -1,
       thirtyFivePlusPoints: -4
     },
-    teamWinPoints: 5
+    teamWinPoints: 6
   };
   
   let points = 0;
@@ -315,8 +315,8 @@ function calculateDSTFantasyPoints(dstStats, scoringRules = null) {
   else if (pointsAllowed <= 34) points += rules.pointsAllowed.twentyEightToThirtyFourPoints;
   else points += rules.pointsAllowed.thirtyFivePlusPoints;
   
-  // Team win
-  if (dstStats.team_win) points += rules.teamWinPoints;
+  // Team win (6 points if team won)
+  if (dstStats.team_win) points += 6; // 6 points for team win
   
   return points;
 }
