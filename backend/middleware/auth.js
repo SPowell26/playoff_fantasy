@@ -232,64 +232,37 @@ export async function loginCommissioner(req, res) {
       });
     }
 
-    // Mark session as modified to ensure it's saved
+    // Mark session as modified - express-session will save it automatically
     req.session.touch();
     
-    // Save session explicitly first, then send response
+    console.log('🍪 Sending response, express-session will set cookie automatically');
+    console.log('🔍 Session details:', {
+      sessionId: req.sessionID,
+      hasCommissioner: !!req.session.commissioner,
+      email: req.session.commissioner?.email,
+      isMaster: req.session.commissioner?.isMaster
+    });
+    
+    // Send response immediately - express-session middleware will:
+    // 1. Automatically save the session to the store (via res.end() hook)
+    // 2. Set the cookie in the response headers
+    // The cookie header is set during response finalization, so we can't check it here
+    res.json({
+      success: true,
+      message: 'Login successful',
+      commissioner: req.session.commissioner,
+      isMaster: isMaster,
+      sessionId: req.sessionID // Include in response for debugging
+    });
+    
+    // Force explicit save as backup for PostgreSQL store
+    // This ensures the session is persisted even if auto-save fails
     req.session.save((err) => {
       if (err) {
-        console.error('❌ Error saving session:', err);
-        return res.status(500).json({
-          error: 'Failed to save session',
-          code: 'SESSION_SAVE_ERROR'
-        });
+        console.error('❌ Error saving session (explicit backup):', err);
+      } else {
+        console.log('✅ Session explicitly saved (backup), sessionId:', req.sessionID);
       }
-      
-      console.log('✅ Session saved successfully, sessionId:', req.sessionID);
-      console.log('🔍 Session after save:', {
-        hasCommissioner: !!req.session.commissioner,
-        email: req.session.commissioner?.email,
-        isMaster: req.session.commissioner?.isMaster
-      });
-      
-      // Force express-session to regenerate/attach cookie
-      // This ensures the cookie middleware runs
-      req.session.regenerate((err) => {
-        if (err) {
-          console.error('❌ Error regenerating session:', err);
-          // Continue anyway - session is already saved
-        } else {
-          // Re-attach commissioner data after regeneration
-          req.session.commissioner = {
-            id: commissioner?.id || null,
-            email: email,
-            username: commissioner?.username || 'Master Commissioner',
-            league_id: commissioner?.league_id || null,
-            league_name: commissioner?.league_name || null,
-            isMaster: isMaster
-          };
-          req.session.save();
-        }
-        
-        // Use setTimeout to allow express-session middleware to attach cookie
-        // This ensures the cookie is set before response is sent
-        setTimeout(() => {
-          console.log('🍪 Response headers before send:', {
-            sessionId: req.sessionID,
-            cookieName: 'fantasy.sid',
-            setCookieHeader: res.getHeader('Set-Cookie')
-          });
-          
-          // Send response - express-session should now have attached the cookie
-          res.json({
-            success: true,
-            message: 'Login successful',
-            commissioner: req.session.commissioner,
-            isMaster: isMaster,
-            sessionId: req.sessionID // Include in response for debugging
-          });
-        }, 0);
-      });
     });
   } catch (error) {
     console.error('Login error:', error);
