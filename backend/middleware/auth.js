@@ -235,7 +235,7 @@ export async function loginCommissioner(req, res) {
     // Mark session as modified to ensure it's saved
     req.session.touch();
     
-    // Save session explicitly first
+    // Save session explicitly first, then send response
     req.session.save((err) => {
       if (err) {
         console.error('❌ Error saving session:', err);
@@ -252,30 +252,43 @@ export async function loginCommissioner(req, res) {
         isMaster: req.session.commissioner?.isMaster
       });
       
-      // Express-session should automatically set the cookie
-      // But we need to ensure it's done before responding
-      // The session store should have saved it by now
-      console.log('🍪 Cookie should be set by express-session:', {
-        sessionId: req.sessionID,
-        cookieName: 'fantasy.sid',
-        hasSetCookie: !!res.getHeader('Set-Cookie')
-      });
-      
-      // Express-session will automatically set the cookie when we send the response
-      // Log the Set-Cookie header to verify it's being set
-      console.log('🍪 Response headers before send:', {
-        sessionId: req.sessionID,
-        cookieName: 'fantasy.sid',
-        setCookieHeader: res.getHeader('Set-Cookie')
-      });
-      
-      // Send response - express-session will attach the cookie automatically
-      res.json({
-        success: true,
-        message: 'Login successful',
-        commissioner: req.session.commissioner,
-        isMaster: isMaster,
-        sessionId: req.sessionID // Include in response for debugging
+      // Force express-session to regenerate/attach cookie
+      // This ensures the cookie middleware runs
+      req.session.regenerate((err) => {
+        if (err) {
+          console.error('❌ Error regenerating session:', err);
+          // Continue anyway - session is already saved
+        } else {
+          // Re-attach commissioner data after regeneration
+          req.session.commissioner = {
+            id: commissioner?.id || null,
+            email: email,
+            username: commissioner?.username || 'Master Commissioner',
+            league_id: commissioner?.league_id || null,
+            league_name: commissioner?.league_name || null,
+            isMaster: isMaster
+          };
+          req.session.save();
+        }
+        
+        // Use setTimeout to allow express-session middleware to attach cookie
+        // This ensures the cookie is set before response is sent
+        setTimeout(() => {
+          console.log('🍪 Response headers before send:', {
+            sessionId: req.sessionID,
+            cookieName: 'fantasy.sid',
+            setCookieHeader: res.getHeader('Set-Cookie')
+          });
+          
+          // Send response - express-session should now have attached the cookie
+          res.json({
+            success: true,
+            message: 'Login successful',
+            commissioner: req.session.commissioner,
+            isMaster: isMaster,
+            sessionId: req.sessionID // Include in response for debugging
+          });
+        }, 0);
       });
     });
   } catch (error) {
