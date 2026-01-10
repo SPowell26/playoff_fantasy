@@ -137,6 +137,9 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Import and start cron jobs for automated stat pulling
+import { startCronJobs } from './cron/scheduler.js';
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
@@ -147,4 +150,13 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📊 Stats API: http://localhost:${PORT}/api/stats`);
   console.log(`📅 Status API: http://localhost:${PORT}/api/status`);
   console.log(`🏆 Teams API: http://localhost:${PORT}/api/teams`);
+  
+  // Start cron jobs for automated stat pulling
+  const systemApiKey = process.env.SYSTEM_API_KEY;
+  
+  if (systemApiKey) {
+    startCronJobs(pool, systemApiKey);
+  } else {
+    console.log('⚠️ SYSTEM_API_KEY not set - cron jobs disabled');
+  }
 }); 
