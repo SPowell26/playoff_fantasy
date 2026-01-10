@@ -232,7 +232,7 @@ export async function loginCommissioner(req, res) {
       });
     }
 
-    // Save session and send response after save
+    // Save session explicitly first
     req.session.save((err) => {
       if (err) {
         console.error('❌ Error saving session:', err);
@@ -243,12 +243,22 @@ export async function loginCommissioner(req, res) {
       }
       
       console.log('✅ Session saved successfully, sessionId:', req.sessionID);
-      console.log('🍪 Cookie will be set:', {
-        sessionId: req.sessionID,
-        cookieName: 'fantasy.sid'
+      console.log('🔍 Session after save:', {
+        hasCommissioner: !!req.session.commissioner,
+        email: req.session.commissioner?.email,
+        isMaster: req.session.commissioner?.isMaster
       });
       
-      // Send response after session is saved
+      // Express-session should automatically set the cookie
+      // But we need to ensure it's done before responding
+      // The session store should have saved it by now
+      console.log('🍪 Cookie should be set by express-session:', {
+        sessionId: req.sessionID,
+        cookieName: 'fantasy.sid',
+        hasSetCookie: !!res.getHeader('Set-Cookie')
+      });
+      
+      // Send response after session is saved and cookie is set
       res.json({
         success: true,
         message: 'Login successful',
