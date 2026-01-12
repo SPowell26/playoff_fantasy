@@ -121,10 +121,13 @@ export function DataProvider({ children }) {
     // Function to update a league
     const updateLeague = async (leagueId, updates) => {
         try {
-            // Prepare the request body - scoring_rules should be sent as JSON string if it's an object
+            // Prepare the request body - scoring_rules and roster_structure should be sent as JSON strings if they're objects
             const requestBody = { ...updates };
             if (updates.scoring_rules && typeof updates.scoring_rules === 'object') {
                 requestBody.scoring_rules = JSON.stringify(updates.scoring_rules);
+            }
+            if (updates.roster_structure && typeof updates.roster_structure === 'object') {
+                requestBody.roster_structure = JSON.stringify(updates.roster_structure);
             }
             
             const response = await fetch(`${API_URL}/api/leagues/${leagueId}`, {
@@ -149,6 +152,15 @@ export function DataProvider({ children }) {
                     updatedLeague.scoring_rules = JSON.parse(updatedLeague.scoring_rules);
                 } catch (e) {
                     console.warn('Failed to parse scoring_rules:', e);
+                }
+            }
+            
+            // Parse roster_structure if it's a string
+            if (updatedLeague.roster_structure && typeof updatedLeague.roster_structure === 'string') {
+                try {
+                    updatedLeague.roster_structure = JSON.parse(updatedLeague.roster_structure);
+                } catch (e) {
+                    console.warn('Failed to parse roster_structure:', e);
                 }
             }
             

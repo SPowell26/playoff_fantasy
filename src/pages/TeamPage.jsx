@@ -762,40 +762,40 @@ const TeamPage = () => {
                     </div>
 
                     {/* Bench Players */}
-                    <div className="bg-gray-800 rounded-lg shadow-lg border border-gray-700">
-                        <div className="px-6 py-4 border-b border-gray-700">
-                            <h3 className="text-lg font-semibold text-white">Bench</h3>
-                        </div>
-                        <div className="divide-y divide-gray-700">
-                            {/* Bench 1 */}
-                            <div className="px-6 py-4 hover:bg-gray-750 transition-colors">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="px-2 py-1 text-xs font-medium rounded-full bg-gray-700 border border-gray-500 text-gray-300">BN</div>
-                                        {getBenchPlayer(0) ? (
-                                            <RosterPlayer player={getBenchPlayer(0)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
-                                        ) : (
-                                            <div className="text-gray-500 italic">No player selected</div>
-                                        )}
-                                    </div>
+                    {(() => {
+                        // Get bench count from league roster_structure, default to 3
+                        let benchCount = 3;
+                        if (league?.roster_structure) {
+                            const rosterStructure = typeof league.roster_structure === 'string' 
+                                ? JSON.parse(league.roster_structure) 
+                                : league.roster_structure;
+                            benchCount = rosterStructure.BN || 3;
+                        }
+                        
+                        return (
+                            <div className="bg-gray-800 rounded-lg shadow-lg border border-gray-700">
+                                <div className="px-6 py-4 border-b border-gray-700">
+                                    <h3 className="text-lg font-semibold text-white">Bench</h3>
+                                </div>
+                                <div className="divide-y divide-gray-700">
+                                    {Array.from({ length: benchCount }, (_, index) => (
+                                        <div key={index} className="px-6 py-4 hover:bg-gray-750 transition-colors">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center space-x-3">
+                                                    <div className="px-2 py-1 text-xs font-medium rounded-full bg-gray-700 border border-gray-500 text-gray-300">BN</div>
+                                                    {getBenchPlayer(index) ? (
+                                                        <RosterPlayer player={getBenchPlayer(index)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
+                                                    ) : (
+                                                        <div className="text-gray-500 italic">No player selected</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
-
-                            {/* Bench 2 */}
-                            <div className="px-6 py-4 hover:bg-gray-750 transition-colors">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="px-2 py-1 text-xs font-medium rounded-full bg-gray-700 border border-gray-500 text-gray-300">BN</div>
-                                        {getBenchPlayer(1) ? (
-                                            <RosterPlayer player={getBenchPlayer(1)} onRemove={handleRemovePlayer} onPlayerClick={handlePlayerClick} currentWeek={currentWeek} scoringRules={scoringRules} isCommissioner={isCommissioner} />
-                                        ) : (
-                                            <div className="text-gray-500 italic">No player selected</div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                        );
+                    })()}
                 </div>
 
                 {/* Team Stats Widget - Takes up 1/3 of the space */}

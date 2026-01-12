@@ -15,6 +15,7 @@ const LeagueSettingsPage = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [league, setLeague] = useState(null);
   const [scoringRules, setScoringRules] = useState(null);
+  const [rosterStructure, setRosterStructure] = useState(null);
   
   const isCommissioner = isCommissionerForLeague(leagueId);
   
@@ -46,7 +47,19 @@ const LeagueSettingsPage = () => {
     };
   };
   
-  // Find league and initialize scoring rules
+  // Default roster structure
+  const getDefaultRosterStructure = () => ({
+    QB: 1,
+    RB: 2,
+    WR: 2,
+    TE: 1,
+    K: 1,
+    DEF: 1,
+    FLEX: 1,
+    BN: 3
+  });
+  
+  // Find league and initialize scoring rules and roster structure
   useEffect(() => {
     const foundLeague = leagues.find(l => l.id == leagueId);
     if (foundLeague) {
@@ -59,6 +72,20 @@ const LeagueSettingsPage = () => {
       // Merge with defaults to ensure all fields are present
       rules = mergeWithDefaults(rules);
       setScoringRules(rules);
+      
+      // Parse roster structure if it's a string, otherwise use as-is
+      let roster = typeof foundLeague.roster_structure === 'string' 
+        ? JSON.parse(foundLeague.roster_structure) 
+        : foundLeague.roster_structure;
+      
+      // Use default if not present
+      if (!roster) {
+        roster = getDefaultRosterStructure();
+      }
+      
+      // Merge with defaults to ensure all fields are present
+      roster = { ...getDefaultRosterStructure(), ...roster };
+      setRosterStructure(roster);
     }
   }, [leagueId, leagues]);
   
@@ -123,17 +150,28 @@ const LeagueSettingsPage = () => {
     setScoringRules(newRules);
   };
   
+  const handleRosterStructureChange = (position, value) => {
+    const newStructure = { ...rosterStructure };
+    const numValue = parseInt(value, 10) || 0;
+    if (numValue < 0) return; // Don't allow negative values
+    newStructure[position] = numValue;
+    setRosterStructure(newStructure);
+  };
+  
   const handleSave = async () => {
-    if (!league || !scoringRules) return;
+    if (!league || !scoringRules || !rosterStructure) return;
     
     setSaving(true);
     try {
-      await updateLeague(league.id, { scoring_rules: scoringRules });
-      alert('✅ Scoring rules updated successfully!');
+      await updateLeague(league.id, { 
+        scoring_rules: scoringRules,
+        roster_structure: rosterStructure
+      });
+      alert('✅ League settings updated successfully!');
       navigate(`/league/${league.id}`);
     } catch (error) {
       console.error('Failed to update league:', error);
-      alert(`❌ Failed to update scoring rules: ${error.message}`);
+      alert(`❌ Failed to update league settings: ${error.message}`);
     } finally {
       setSaving(false);
     }
@@ -156,7 +194,7 @@ const LeagueSettingsPage = () => {
     }
   };
   
-  if (!league || !scoringRules) {
+  if (!league || !scoringRules || !rosterStructure) {
     return <div className="min-h-screen bg-gray-900 text-white p-6">Loading...</div>;
   }
   
@@ -559,6 +597,38 @@ const LeagueSettingsPage = () => {
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
+          </div>
+        </div>
+        
+        {/* Roster Structure Section */}
+        <div className="bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6 mb-6">
+          <h2 className="text-2xl font-bold text-white mb-6">Roster Structure</h2>
+          <p className="text-gray-300 mb-6">Customize the number of players at each position for this league.</p>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Object.entries(rosterStructure).map(([position, count]) => (
+              <div key={position} className="bg-gray-700 rounded-lg p-4">
+                <label className="block text-sm font-semibold text-gray-300 mb-2">
+                  {position === 'DEF' ? 'D/ST' : position}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={count}
+                  onChange={(e) => handleRosterStructureChange(position, e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-center text-lg font-semibold"
+                />
+              </div>
+            ))}
+          </div>
+          
+          <div className="mt-4 p-4 bg-gray-700 rounded-lg">
+            <p className="text-sm text-gray-300">
+              <strong>Total Roster Spots:</strong>{' '}
+              <span className="text-blue-400 font-semibold">
+                {Object.values(rosterStructure).reduce((sum, count) => sum + count, 0)}
+              </span>
+            </p>
           </div>
         </div>
         

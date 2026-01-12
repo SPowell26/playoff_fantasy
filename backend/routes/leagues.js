@@ -74,10 +74,22 @@ router.post('/', async (req, res) => {
     try {
       await client.query('BEGIN');
       
+      // Default roster structure: {QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DEF: 1, FLEX: 1, BN: 3}
+      const defaultRosterStructure = {
+        QB: 1,
+        RB: 2,
+        WR: 2,
+        TE: 1,
+        K: 1,
+        DEF: 1,
+        FLEX: 1,
+        BN: 3
+      };
+      
       // Create the league - let database auto-generate ID
       const leagueResult = await client.query(
-        `INSERT INTO leagues (name, commissioner, commissioner_email, year, season_type, scoring_rules, max_teams, bench_spots, flex_spots) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        `INSERT INTO leagues (name, commissioner, commissioner_email, year, season_type, scoring_rules, max_teams, bench_spots, flex_spots, roster_structure) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
         [
           name,
           commissioner,
@@ -116,7 +128,8 @@ router.post('/', async (req, res) => {
           }),
           12, // max_teams
           2,  // bench_spots
-          1   // flex_spots
+          1,  // flex_spots
+          JSON.stringify(defaultRosterStructure) // roster_structure
         ]
       );
       
@@ -296,7 +309,7 @@ router.post('/import', async (req, res) => {
 // PUT update league
 router.put('/:id', requireCommissioner(), async (req, res) => {
   try {
-    const { name, commissioner, scoring_rules } = req.body;
+    const { name, commissioner, scoring_rules, roster_structure } = req.body;
     const db = req.app.locals.db;
     
     // Handle scoring_rules - if it's a string, parse it; if it's an object, stringify it
@@ -314,14 +327,30 @@ router.put('/:id', requireCommissioner(), async (req, res) => {
       scoringRulesValue = JSON.stringify(scoringRulesValue);
     }
     
+    // Handle roster_structure - if it's a string, parse it; if it's an object, stringify it
+    let rosterStructureValue = roster_structure;
+    if (roster_structure) {
+      if (typeof roster_structure === 'string') {
+        try {
+          rosterStructureValue = JSON.parse(roster_structure);
+        } catch (e) {
+          // If parsing fails, use as-is
+          rosterStructureValue = roster_structure;
+        }
+      }
+      // Convert to JSON string for database storage
+      rosterStructureValue = JSON.stringify(rosterStructureValue);
+    }
+    
     const result = await db.query(
       `UPDATE leagues 
        SET name = COALESCE($1, name), 
            commissioner = COALESCE($2, commissioner), 
            scoring_rules = COALESCE($3::jsonb, scoring_rules),
+           roster_structure = COALESCE($4::jsonb, roster_structure),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $4 RETURNING *`,
-      [name, commissioner, scoringRulesValue, req.params.id]
+       WHERE id = $5 RETURNING *`,
+      [name, commissioner, scoringRulesValue, rosterStructureValue, req.params.id]
     );
     
     if (result.rows.length === 0) {
