@@ -440,6 +440,32 @@ router.get('/teams/:teamId', async (req, res) => {
   }
 });
 
+// DELETE a team from a league
+router.delete('/:id/teams/:teamId', requireCommissioner(), async (req, res) => {
+  try {
+    const { id: leagueId, teamId } = req.params;
+    const db = req.app.locals.db;
+    
+    // Verify the team belongs to this league
+    const teamCheck = await db.query(
+      'SELECT id FROM teams WHERE id = $1 AND league_id = $2',
+      [teamId, leagueId]
+    );
+    
+    if (teamCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found in this league' });
+    }
+    
+    // Delete the team (cascade will delete roster entries)
+    await db.query('DELETE FROM teams WHERE id = $1', [teamId]);
+    
+    res.status(204).send();
+  } catch (error) {
+    console.error('Database error:', error);
+    res.status(500).json({ error: 'Failed to delete team' });
+  }
+});
+
 // GET all teams in a league
 router.get('/:id/teams', async (req, res) => {
   try {

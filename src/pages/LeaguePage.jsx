@@ -228,7 +228,28 @@ const LeaguePage = () => {
           teams={teams} 
           league={league} 
           currentWeek={currentWeek} 
-          currentYear={nflSeasonYear} 
+          currentYear={nflSeasonYear}
+          isCommissioner={isCommissioner}
+          onDeleteTeam={async (teamId) => {
+            if (!window.confirm('Are you sure you want to delete this team? This action cannot be undone.')) {
+              return;
+            }
+            try {
+              const response = await fetch(`${API_URL}/api/leagues/${league.id}/teams/${teamId}`, {
+                method: 'DELETE',
+                credentials: 'include'
+              });
+              if (response.ok) {
+                await fetchTeams(); // Refresh teams list
+              } else {
+                const errorData = await response.json();
+                alert(`Failed to delete team: ${errorData.error || 'Unknown error'}`);
+              }
+            } catch (error) {
+              console.error('Failed to delete team:', error);
+              alert('Failed to delete team. Please try again.');
+            }
+          }}
         />
       )}
 

@@ -106,9 +106,17 @@ const PlayerSelectionForm = ({ leagueId, teamId, onPlayerAdded, onClose }) => {
         
         // Notify parent component
         onPlayerAdded(selectedPlayer);
+      } else {
+        // Handle error response
+        const errorData = await response.json();
+        const errorMessage = errorData.error || 'Failed to add player';
+        const currentTeam = errorData.currentTeam ? ` (already on ${errorData.currentTeam})` : '';
+        alert(`❌ ${errorMessage}${currentTeam}`);
+        console.error('Error adding player:', errorData);
       }
     } catch (error) {
       console.error('Error adding player:', error);
+      alert('❌ Failed to add player. Please try again.');
     }
   };
 

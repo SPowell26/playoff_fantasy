@@ -6,7 +6,7 @@ import { useYearly } from '../context/YearlyContext';
 import { getWeekDisplayName } from '../utils/weekDisplay';
 import API_URL from '../config/api';
 
-const LeagueStandings = ({ teams, league, currentWeek, currentYear }) => {
+const LeagueStandings = ({ teams, league, currentWeek, currentYear, isCommissioner, onDeleteTeam }) => {
   const navigate = useNavigate();
   const { getPlayerWithRealStats } = useData();
   const { seasonType: globalSeasonType } = useYearly();
@@ -187,15 +187,29 @@ const LeagueStandings = ({ teams, league, currentWeek, currentYear }) => {
                     <span className="text-gray-300">{team.weeksPlayed || 0}</span>
                   </td>
                   <td className="py-4 px-4 text-center">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleTeamClick(team.id);
-                      }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
-                    >
-                      View Details
-                    </button>
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTeamClick(team.id);
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+                      >
+                        View Details
+                      </button>
+                      {isCommissioner && onDeleteTeam && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteTeam(team.id);
+                          }}
+                          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+                          title="Delete Team"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

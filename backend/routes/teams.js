@@ -162,7 +162,16 @@ router.post('/:teamId/players', requireTeamCommissioner, async (req, res) => {
     
   } catch (error) {
     console.error('Database error:', error);
-    res.status(500).json({ error: 'Failed to add player to team' });
+    
+    // Check if it's a unique constraint violation (player already on team)
+    if (error.code === '23505' && error.constraint === 'team_rosters_league_id_player_id_key') {
+      return res.status(400).json({ 
+        error: 'Player is already on a team in this league',
+        details: error.detail
+      });
+    }
+    
+    res.status(500).json({ error: 'Failed to add player to team', details: error.message });
   }
 });
 
