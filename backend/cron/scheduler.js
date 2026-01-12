@@ -265,10 +265,10 @@ export function startCronJobs(db, systemApiKey) {
         console.log(`🔄 [CRON] In game time window (${windowCheck.reason}), pulling stats...`);
         await pullStats(db, systemApiKey, port);
       } else {
-        // Only log every 30 minutes to avoid spam
+        // Log every 15 minutes (at :00, :15, :30, :45) to help with debugging
         const now = new Date();
-        if (now.getMinutes() % 30 === 0) {
-          console.log(`⏸️ [CRON] Not in game time window (${windowCheck.reason}), skipping...`);
+        if (now.getMinutes() % 15 === 0) {
+          console.log(`⏸️ [CRON] Not in game time window (${windowCheck.reason}), skipping stat pull...`);
         }
       }
     }, {

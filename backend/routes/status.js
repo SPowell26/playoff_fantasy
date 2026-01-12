@@ -255,5 +255,51 @@ router.post('/fetch-schedule', async (req, res) => {
   }
 });
 
+// GET cron job status
+router.get('/cron-status', async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    const systemApiKey = process.env.SYSTEM_API_KEY;
+    
+    // Check if SYSTEM_API_KEY is set
+    const cronEnabled = !!systemApiKey;
+    
+    // Check game schedule in database
+    const scheduleCheck = await db.query(
+      `SELECT COUNT(*) as count, MIN(game_date) as first_game, MAX(game_date) as last_game
+       FROM game_schedule 
+       WHERE game_date >= NOW() - INTERVAL '7 days'
+       AND game_date <= NOW() + INTERVAL '7 days'`
+    );
+    
+    const scheduleCount = parseInt(scheduleCheck.rows[0].count);
+    
+    // Check game time window
+    const now = new Date();
+    const windowCheckResult = await db.query(
+      `SELECT game_date FROM game_schedule 
+       WHERE game_date >= NOW() - INTERVAL '6 hours' 
+       AND game_date <= NOW() + INTERVAL '6 hours'
+       ORDER BY game_date ASC`
+    );
+    
+    const hasRecentGames = windowCheckResult.rows.length > 0;
+    
+    res.json({
+      cronEnabled,
+      systemApiKeySet: !!systemApiKey,
+      scheduleGamesInDB: scheduleCount,
+      hasRecentGames,
+      currentTime: now.toISOString(),
+      message: cronEnabled 
+        ? 'Cron jobs are enabled. Check server logs for [CRON] messages.' 
+        : 'Cron jobs are disabled (SYSTEM_API_KEY not set)'
+    });
+  } catch (error) {
+    console.error('Error checking cron status:', error);
+    res.status(500).json({ error: 'Failed to check cron status', details: error.message });
+  }
+});
+
 export default router;
 
