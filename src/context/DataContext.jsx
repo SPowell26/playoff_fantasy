@@ -462,8 +462,9 @@ export function DataProvider({ children }) {
                         fumbleRecoveries: rawStats.fumbleRecoveries || 0,
                         safeties: rawStats.safeties || 0,
                         blockedKicks: rawStats.blockedKicks || 0,
-                        puntReturnTD: rawStats.punt_return_touchdowns || 0,
-                        kickoffReturnTD: rawStats.kickoff_return_touchdowns || 0,
+                        defensiveTDs: rawStats.defensiveTDs || 0,
+                        puntReturnTD: rawStats.puntReturnTD || rawStats.punt_return_touchdowns || 0,
+                        kickoffReturnTD: rawStats.kickoffReturnTD || rawStats.kickoff_return_touchdowns || 0,
                         pointsAllowed: rawStats.pointsAllowed || 0,
                         // Preserve boolean values correctly - handle true/1/'true' as true, everything else as false
                         teamWin: rawStats.teamWin === true || rawStats.teamWin === 1 || rawStats.teamWin === 'true' || 

@@ -39,10 +39,11 @@ function mapTeamDefenseStats(teamStats, opponentScore, isWinner, opponentStats) 
         break;
         
       case 'defensiveSpecialTeamsTds':
+      case 'defensiveTouchdowns':
         // This is defensive/special teams TDs scored BY the team
         const defTDs = parseInt(stat.displayValue) || 0;
         dstStats.defensive_touchdowns = defTDs;
-        console.log(`  🎯 Defensive/Special Teams TDs: ${defTDs}`);
+        console.log(`  🎯 Defensive/Special Teams TDs (${stat.name}): ${defTDs}`);
         break;
         
       case 'turnovers':
@@ -75,8 +76,9 @@ function mapTeamDefenseStats(teamStats, opponentScore, isWinner, opponentStats) 
   
   // NOW GET INTERCEPTIONS, FUMBLES, AND SACKS FROM OPPONENT (the swap!)
   if (opponentStats) {
-    console.log(`  🔍 Available opponent stats:`, opponentStats.map(s => s.name));
+    console.log(`  🔍 Available opponent stats:`, opponentStats.map(s => `${s.name}: ${s.displayValue}`));
     for (const stat of opponentStats) {
+      console.log(`  🔍 Checking opponent stat: ${stat.name} = ${stat.displayValue}`);
       switch (stat.name) {
         case 'interceptions':
           // This is interceptions thrown BY the opponent (credit goes to this team's D/ST)
@@ -94,16 +96,41 @@ function mapTeamDefenseStats(teamStats, opponentScore, isWinner, opponentStats) 
           
         case 'sacksYardsLost':
           // This is sacks allowed BY the opponent (credit goes to this team's D/ST)
-          console.log(`  🔍 Opponent sacksYardsLost raw value: "${stat.displayValue}"`);
-          if (stat.displayValue && stat.displayValue.includes('-')) {
-            const parts = stat.displayValue.split('-');
-            const sacks = parseInt(parts[0]) || 0;
-            const yards = parseInt(parts[1]) || 0;
-            dstStats.sacks = sacks;
-            console.log(`  🎯 Sacks (from opponent): ${sacks}, Yards: ${yards}`);
+          // Format: "5-36" = 5 sacks, 36 yards lost
+          // We only want the sack count (first number before the dash)
+          console.log(`  ✅ FOUND sacksYardsLost! Raw value: "${stat.displayValue}"`);
+          if (stat.displayValue) {
+            // Handle format like "5-36" or just "5" if no yards
+            if (stat.displayValue.includes('-')) {
+              const parts = stat.displayValue.split('-');
+              const sacks = parseInt(parts[0]) || 0;
+              const yards = parseInt(parts[1]) || 0;
+              dstStats.sacks = sacks;
+              console.log(`  🎯✅ SETTING SACKS FROM sacksYardsLost: ${sacks} (NOT from turnovers!)`);
+              console.log(`     Parsed from "${stat.displayValue}" → ${sacks} sacks, ${yards} yards`);
+            } else {
+              // If no dash, try to parse as just a number
+              const sacks = parseInt(stat.displayValue) || 0;
+              dstStats.sacks = sacks;
+              console.log(`  🎯✅ SETTING SACKS FROM sacksYardsLost: ${sacks} (no dash format)`);
+            }
+          } else {
+            console.log(`  ⚠️ sacksYardsLost found but displayValue is empty/null`);
+          }
+          break;
+          
+        default:
+          // Log other stats we're not using (for debugging)
+          if (stat.name && (stat.name.toLowerCase().includes('sack') || stat.name.toLowerCase().includes('turnover'))) {
+            console.log(`  🔍 Other stat (not used): ${stat.name} = ${stat.displayValue}`);
           }
           break;
       }
+    }
+    
+    // Final check - if sacks is still 0, log a warning
+    if (dstStats.sacks === 0) {
+      console.log(`  ⚠️ WARNING: Sacks is still 0 after processing opponent stats. Check if sacksYardsLost exists.`);
     }
   }
   
@@ -385,12 +412,14 @@ function processGameForDST(gameSummaryData, currentWeek = 1, currentYear = 2025)
   // Process each team's defensive stats
   for (const team of gameSummaryData.boxscore.teams) {
     const teamAbbr = team.team.abbreviation;
-    const opponentScore = teamScores[teamAbbr];
     const isWinner = teamWinners[teamAbbr];
     
     // Find the opponent team
     const opponentAbbr = Object.keys(teamStatsMap).find(abbr => abbr !== teamAbbr);
     const opponentStats = teamStatsMap[opponentAbbr];
+    
+    // Get opponent's score (this is what the D/ST allowed)
+    const opponentScore = teamScores[opponentAbbr] || 0;
     
     console.log(`\n🏈 Processing ${teamAbbr} D/ST stats (opponent: ${opponentAbbr}):`);
     
@@ -399,8 +428,11 @@ function processGameForDST(gameSummaryData, currentWeek = 1, currentYear = 2025)
     
     // For D/ST, we only use team-level stats (no individual player stats needed)
     // Team-level stats are available and contain all the data we need
+    // Map interceptions to interceptions_defense for database consistency
     const combinedDstStats = {
-      ...teamDstStats
+      ...teamDstStats,
+      // Map interceptions to interceptions_defense (database field name)
+      interceptions_defense: teamDstStats.interceptions || 0
       // Note: All D/ST stats come from team-level data, not individual players
       // This avoids double-counting and uses the correct team totals
     };
