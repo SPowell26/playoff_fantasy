@@ -466,6 +466,9 @@ export function DataProvider({ children }) {
                         puntReturnTD: rawStats.puntReturnTD || rawStats.punt_return_touchdowns || 0,
                         kickoffReturnTD: rawStats.kickoffReturnTD || rawStats.kickoff_return_touchdowns || 0,
                         pointsAllowed: rawStats.pointsAllowed || 0,
+                        // 2-point conversions
+                        twoPointConversionsPassing: rawStats.twoPointConversionsPassing || 0,
+                        twoPointConversionsReceiving: rawStats.twoPointConversionsReceiving || 0,
                         // Preserve boolean values correctly - handle true/1/'true' as true, everything else as false
                         teamWin: rawStats.teamWin === true || rawStats.teamWin === 1 || rawStats.teamWin === 'true' || 
                                  rawStats.team_win === true || rawStats.team_win === 1 || rawStats.team_win === 'true',

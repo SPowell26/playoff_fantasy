@@ -387,6 +387,27 @@ router.post('/import-playoff', requireCommissionerOrSystem, async (req, res) => 
         // Extract player stats from both teams
         const teams = gameSummaryData.boxscore.players;
         
+        // First, collect all player names from the game for better name matching
+        const allPlayerNames = [];
+        for (let teamIndex = 0; teamIndex <= 1; teamIndex++) {
+          const team = teams[teamIndex];
+          if (!team || !team.statistics) continue;
+          for (const statCategory of team.statistics) {
+            if (!statCategory.athletes || !Array.isArray(statCategory.athletes)) continue;
+            for (const athlete of statCategory.athletes) {
+              if (athlete.athlete && athlete.athlete.displayName) {
+                const playerName = athlete.athlete.displayName;
+                if (!allPlayerNames.includes(playerName)) {
+                  allPlayerNames.push(playerName);
+                }
+              }
+            }
+          }
+        }
+        
+        // Now extract 2-point conversions using actual player names for matching
+        const twoPointConversions = extractTwoPointConversions(gameSummaryData.scoringPlays, allPlayerNames);
+        
         for (let teamIndex = 0; teamIndex <= 1; teamIndex++) {
           const team = teams[teamIndex];
           if (!team || !team.statistics) continue;
@@ -403,7 +424,7 @@ router.post('/import-playoff', requireCommissionerOrSystem, async (req, res) => 
               const playerId = athlete.athlete.id;
               
               // Map the stat category to our database fields
-              const mappedStats = mapESPNStatsToDatabase(statCategory.name, athlete.stats, fieldGoalDistances, playerName);
+              const mappedStats = mapESPNStatsToDatabase(statCategory.name, athlete.stats, fieldGoalDistances, playerName, twoPointConversions);
               
               if (mappedStats) {
                 // Determine the playoff week based on game date
@@ -476,7 +497,8 @@ router.post('/import-playoff', requireCommissionerOrSystem, async (req, res) => 
             stat.fumbles_lost, stat.sacks, stat.interceptions_defense, stat.fumble_recoveries, stat.safeties,
             stat.blocked_kicks, stat.punt_return_touchdowns, stat.kickoff_return_touchdowns,
             stat.points_allowed, stat.field_goals_0_39, stat.field_goals_40_49, stat.field_goals_50_plus,
-            stat.field_goals_missed || 0, stat.extra_points, stat.extra_points_missed || 0
+            stat.field_goals_missed || 0, stat.extra_points, stat.extra_points_missed || 0,
+            stat.two_point_conversions_passing || 0, stat.two_point_conversions_receiving || 0
           ]
         );
         insertedCount++;
@@ -590,6 +612,27 @@ router.post('/weekly-update', async (req, res) => {
         // Extract player stats from both teams
         const teams = gameSummaryData.boxscore.players;
         
+        // First, collect all player names from the game for better name matching
+        const allPlayerNames = [];
+        for (let teamIndex = 0; teamIndex <= 1; teamIndex++) {
+          const team = teams[teamIndex];
+          if (!team || !team.statistics) continue;
+          for (const statCategory of team.statistics) {
+            if (!statCategory.athletes || !Array.isArray(statCategory.athletes)) continue;
+            for (const athlete of statCategory.athletes) {
+              if (athlete.athlete && athlete.athlete.displayName) {
+                const playerName = athlete.athlete.displayName;
+                if (!allPlayerNames.includes(playerName)) {
+                  allPlayerNames.push(playerName);
+                }
+              }
+            }
+          }
+        }
+        
+        // Now extract 2-point conversions using actual player names for matching
+        const twoPointConversions = extractTwoPointConversions(gameSummaryData.scoringPlays, allPlayerNames);
+        
         for (let teamIndex = 0; teamIndex <= 1; teamIndex++) {
           const team = teams[teamIndex];
           console.log(`  🔍 Team ${teamIndex}:`, team ? 'exists' : 'null');
@@ -680,7 +723,7 @@ router.post('/weekly-update', async (req, res) => {
               }
               
               // Map the stat category and merge with existing stats
-              const newStats = mapESPNStatsToDatabase(statCategory.name, athlete.stats, fieldGoalDistances, playerName);
+              const newStats = mapESPNStatsToDatabase(statCategory.name, athlete.stats, fieldGoalDistances, playerName, twoPointConversions);
               
               if (newStats) {
                 // Merge the new stats with existing stats (don't overwrite, add to them)
@@ -800,8 +843,9 @@ router.post('/weekly-update', async (req, res) => {
             fumbles_lost, sacks, interceptions_defense, fumble_recoveries, safeties,
             blocked_kicks, punt_return_touchdowns, kickoff_return_touchdowns,
             points_allowed, field_goals_0_39, field_goals_40_49, field_goals_50_plus,
-            field_goals_missed, extra_points, extra_points_missed
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+            field_goals_missed, extra_points, extra_points_missed,
+            two_point_conversions_passing, two_point_conversions_receiving
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
           ON CONFLICT (player_id, week, year, season_type) DO UPDATE SET
             passing_yards = EXCLUDED.passing_yards,
             passing_touchdowns = EXCLUDED.passing_touchdowns,
@@ -826,6 +870,8 @@ router.post('/weekly-update', async (req, res) => {
             field_goals_missed = EXCLUDED.field_goals_missed,
             extra_points = EXCLUDED.extra_points,
             extra_points_missed = EXCLUDED.extra_points_missed,
+            two_point_conversions_passing = EXCLUDED.two_point_conversions_passing,
+            two_point_conversions_receiving = EXCLUDED.two_point_conversions_receiving,
             updated_at = CURRENT_TIMESTAMP
           RETURNING (xmax = 0)`,
           [
@@ -834,7 +880,8 @@ router.post('/weekly-update', async (req, res) => {
             stat.fumbles_lost, stat.sacks, stat.interceptions_defense, stat.fumble_recoveries, stat.safeties,
             stat.blocked_kicks, stat.punt_return_touchdowns, stat.kickoff_return_touchdowns,
             stat.points_allowed, stat.field_goals_0_39, stat.field_goals_40_49, stat.field_goals_50_plus,
-            stat.field_goals_missed || 0, stat.extra_points, stat.extra_points_missed || 0
+            stat.field_goals_missed || 0, stat.extra_points, stat.extra_points_missed || 0,
+            stat.two_point_conversions_passing || 0, stat.two_point_conversions_receiving || 0
           ]
         );
         
@@ -1104,6 +1151,10 @@ router.get('/scoring-ready/:week', async (req, res) => {
           // Note: interceptions above is already mapped correctly based on position
           fumbleRecoveries: stat.fumble_recoveries || 0,
           safeties: stat.safeties || 0,
+          
+          // 2-point conversions
+          twoPointConversionsPassing: stat.two_point_conversions_passing || 0,
+          twoPointConversionsReceiving: stat.two_point_conversions_receiving || 0,
           blockedKicks: stat.blocked_kicks || 0,
           puntReturnTD: stat.punt_return_touchdowns || 0,
           kickoffReturnTD: stat.kickoff_return_touchdowns || 0,
@@ -1350,6 +1401,27 @@ router.post('/import-week', async (req, res) => {
         // Extract player stats from both teams
         const teams = gameSummaryData.boxscore.players;
         
+        // First, collect all player names from the game for better name matching
+        const allPlayerNames = [];
+        for (let teamIndex = 0; teamIndex <= 1; teamIndex++) {
+          const team = teams[teamIndex];
+          if (!team || !team.statistics) continue;
+          for (const statCategory of team.statistics) {
+            if (!statCategory.athletes || !Array.isArray(statCategory.athletes)) continue;
+            for (const athlete of statCategory.athletes) {
+              if (athlete.athlete && athlete.athlete.displayName) {
+                const playerName = athlete.athlete.displayName;
+                if (!allPlayerNames.includes(playerName)) {
+                  allPlayerNames.push(playerName);
+                }
+              }
+            }
+          }
+        }
+        
+        // Now extract 2-point conversions using actual player names for matching
+        const twoPointConversions = extractTwoPointConversions(gameSummaryData.scoringPlays, allPlayerNames);
+        
         for (let teamIndex = 0; teamIndex <= 1; teamIndex++) {
           const team = teams[teamIndex];
           if (!team || !team.statistics) continue;
@@ -1423,7 +1495,7 @@ router.post('/import-week', async (req, res) => {
               }
               
               // Map the stat category and merge with existing stats
-              const newStats = mapESPNStatsToDatabase(statCategory.name, athlete.stats, fieldGoalDistances, playerName);
+              const newStats = mapESPNStatsToDatabase(statCategory.name, athlete.stats, fieldGoalDistances, playerName, twoPointConversions);
               
               if (newStats) {
                 // Merge the new stats with existing stats
@@ -1595,8 +1667,9 @@ router.post('/import-week', async (req, res) => {
             fumbles_lost, sacks, interceptions_defense, fumble_recoveries, safeties,
             blocked_kicks, punt_return_touchdowns, kickoff_return_touchdowns,
             points_allowed, field_goals_0_39, field_goals_40_49, field_goals_50_plus,
-            field_goals_missed, extra_points, extra_points_missed
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+            field_goals_missed, extra_points, extra_points_missed,
+            two_point_conversions_passing, two_point_conversions_receiving
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
           ON CONFLICT (player_id, week, year, season_type) DO UPDATE SET
             passing_yards = EXCLUDED.passing_yards,
             passing_touchdowns = EXCLUDED.passing_touchdowns,
@@ -1621,6 +1694,8 @@ router.post('/import-week', async (req, res) => {
             field_goals_missed = EXCLUDED.field_goals_missed,
             extra_points = EXCLUDED.extra_points,
             extra_points_missed = EXCLUDED.extra_points_missed,
+            two_point_conversions_passing = EXCLUDED.two_point_conversions_passing,
+            two_point_conversions_receiving = EXCLUDED.two_point_conversions_receiving,
             updated_at = CURRENT_TIMESTAMP`,
           [
             stat.player_id, stat.week, stat.year, stat.season_type,
@@ -1631,7 +1706,8 @@ router.post('/import-week', async (req, res) => {
             stat.safeties, stat.blocked_kicks, stat.punt_return_touchdowns,
             stat.kickoff_return_touchdowns, stat.points_allowed,
             stat.field_goals_0_39, stat.field_goals_40_49, stat.field_goals_50_plus,
-            stat.field_goals_missed || 0, stat.extra_points, stat.extra_points_missed || 0
+            stat.field_goals_missed || 0, stat.extra_points, stat.extra_points_missed || 0,
+            stat.two_point_conversions_passing || 0, stat.two_point_conversions_receiving || 0
           ]
         );
         
@@ -1736,7 +1812,206 @@ function extractFieldGoalDistances(scoringPlays) {
   return fieldGoalDistances;
 }
 
-function mapESPNStatsToDatabase(statCategory, stats, fieldGoalDistances, playerName) {
+/**
+ * Normalize a player name for matching (handles variations like "C. Williams" vs "Caleb Williams")
+ */
+function normalizePlayerName(name) {
+  if (!name) return '';
+  // Remove extra spaces, convert to lowercase
+  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/**
+ * Match a name from scoring play text to an actual player name
+ * Tries multiple matching strategies to handle name format variations
+ */
+function matchPlayerName(extractedName, actualPlayerNames) {
+  const normalized = normalizePlayerName(extractedName);
+  
+  // Strategy 1: Exact match (case-insensitive)
+  for (const actualName of actualPlayerNames) {
+    if (normalizePlayerName(actualName) === normalized) {
+      return actualName;
+    }
+  }
+  
+  // Strategy 2: Last name only match (e.g., "Williams" matches "Caleb Williams")
+  const extractedParts = normalized.split(' ');
+  const extractedLastName = extractedParts[extractedParts.length - 1];
+  
+  if (extractedLastName && extractedLastName.length > 2) {
+    for (const actualName of actualPlayerNames) {
+      const actualParts = normalizePlayerName(actualName).split(' ');
+      const actualLastName = actualParts[actualParts.length - 1];
+      if (actualLastName === extractedLastName) {
+        // If extracted name is just last name, or if first initial matches
+        if (extractedParts.length === 1 || 
+            (extractedParts.length === 2 && extractedParts[0].length === 1 && 
+             actualParts[0].startsWith(extractedParts[0]))) {
+          return actualName;
+        }
+      }
+    }
+  }
+  
+  // Strategy 3: First initial + last name (e.g., "C. Williams" matches "Caleb Williams")
+  if (extractedParts.length === 2 && extractedParts[0].length === 1) {
+    for (const actualName of actualPlayerNames) {
+      const actualParts = normalizePlayerName(actualName).split(' ');
+      if (actualParts.length >= 2 && 
+          actualParts[0].startsWith(extractedParts[0]) && 
+          actualParts[actualParts.length - 1] === extractedParts[1]) {
+        return actualName;
+      }
+    }
+  }
+  
+  // No match found - return the extracted name as-is (will be matched later)
+  return extractedName;
+}
+
+/**
+ * Extract 2-point conversions from scoring plays
+ * Returns an object with player names as keys and conversion counts
+ * Uses actual player names from the game for better matching
+ */
+function extractTwoPointConversions(scoringPlays, actualPlayerNames = []) {
+  const conversions = {
+    passing: {},  // { playerName: count }
+    receiving: {} // { playerName: count }
+  };
+  
+  if (!scoringPlays || !Array.isArray(scoringPlays)) {
+    console.log('  ⚠️ No scoring plays provided for 2-point conversion extraction');
+    return conversions;
+  }
+  
+  console.log(`  🔍 Extracting 2-point conversions from ${scoringPlays.length} scoring plays`);
+  console.log(`  🔍 Available player names for matching: ${actualPlayerNames.length} players`);
+  
+  for (const play of scoringPlays) {
+    if (!play.text) continue;
+    
+    const text = play.text.toLowerCase();
+    
+    // Log all scoring plays to see what we're working with
+    if (text.includes('2') && (text.includes('point') || text.includes('conversion'))) {
+      console.log(`  📝 Scoring play text: "${play.text}"`);
+    }
+    
+    // Check for 2-point conversion patterns
+    if (text.includes('2-point') || text.includes('two-point') || text.includes('2 pt') || text.includes('two pt')) {
+      // Pattern 1: "Player1 pass to Player2 for 2-point conversion"
+      let match = play.text.match(/([A-Za-z\s\.]+)\s+pass\s+to\s+([A-Za-z\s\.]+)\s+for\s+2[- ]?point/i);
+      if (match) {
+        const extractedPasser = match[1].trim();
+        const extractedReceiver = match[2].trim();
+        
+        // Match to actual player names if available
+        const passer = actualPlayerNames.length > 0 
+          ? matchPlayerName(extractedPasser, actualPlayerNames) 
+          : extractedPasser;
+        const receiver = actualPlayerNames.length > 0 
+          ? matchPlayerName(extractedReceiver, actualPlayerNames) 
+          : extractedReceiver;
+        
+        conversions.passing[passer] = (conversions.passing[passer] || 0) + 1;
+        conversions.receiving[receiver] = (conversions.receiving[receiver] || 0) + 1;
+        console.log(`  🎯 Found 2-point conversion: ${passer} → ${receiver} (extracted: ${extractedPasser} → ${extractedReceiver})`);
+        continue;
+      }
+      
+      // Pattern 2: "2-point conversion: Player1 pass to Player2"
+      match = play.text.match(/2[- ]?point\s+conversion[:\s]+([A-Za-z\s\.]+)\s+pass\s+to\s+([A-Za-z\s\.]+)/i);
+      if (match) {
+        const extractedPasser = match[1].trim();
+        const extractedReceiver = match[2].trim();
+        
+        const passer = actualPlayerNames.length > 0 
+          ? matchPlayerName(extractedPasser, actualPlayerNames) 
+          : extractedPasser;
+        const receiver = actualPlayerNames.length > 0 
+          ? matchPlayerName(extractedReceiver, actualPlayerNames) 
+          : extractedReceiver;
+        
+        conversions.passing[passer] = (conversions.passing[passer] || 0) + 1;
+        conversions.receiving[receiver] = (conversions.receiving[receiver] || 0) + 1;
+        console.log(`  🎯 Found 2-point conversion: ${passer} → ${receiver} (extracted: ${extractedPasser} → ${extractedReceiver})`);
+        continue;
+      }
+      
+      // Pattern 2b: "(Player1 Pass to Player2 for Two-Point Conversion)" - in parentheses at end
+      match = play.text.match(/\(([A-Za-z\s\.]+)\s+Pass\s+to\s+([A-Za-z\s\.]+)\s+for\s+Two[- ]?Point\s+Conversion\)/i);
+      if (match) {
+        const extractedPasser = match[1].trim();
+        const extractedReceiver = match[2].trim();
+        
+        const passer = actualPlayerNames.length > 0 
+          ? matchPlayerName(extractedPasser, actualPlayerNames) 
+          : extractedPasser;
+        const receiver = actualPlayerNames.length > 0 
+          ? matchPlayerName(extractedReceiver, actualPlayerNames) 
+          : extractedReceiver;
+        
+        conversions.passing[passer] = (conversions.passing[passer] || 0) + 1;
+        conversions.receiving[receiver] = (conversions.receiving[receiver] || 0) + 1;
+        console.log(`  🎯 Found 2-point conversion (parentheses): ${passer} → ${receiver} (extracted: ${extractedPasser} → ${extractedReceiver})`);
+        continue;
+      }
+      
+      // Pattern 3: "Player1 run for 2-point conversion" (rushing 2-point)
+      match = play.text.match(/([A-Za-z\s\.]+)\s+run\s+for\s+2[- ]?point/i);
+      if (match) {
+        const extractedRusher = match[1].trim();
+        const rusher = actualPlayerNames.length > 0 
+          ? matchPlayerName(extractedRusher, actualPlayerNames) 
+          : extractedRusher;
+        
+        // Rushing 2-point conversions count as receiving for the same player
+        conversions.receiving[rusher] = (conversions.receiving[rusher] || 0) + 1;
+        console.log(`  🎯 Found rushing 2-point conversion: ${rusher} (extracted: ${extractedRusher})`);
+        continue;
+      }
+      
+      // Pattern 4: "Player1 to Player2 for 2-point conversion" (no "pass" word)
+      match = play.text.match(/([A-Za-z\s\.]+)\s+to\s+([A-Za-z\s\.]+)\s+for\s+2[- ]?point/i);
+      if (match) {
+        const extractedPasser = match[1].trim();
+        const extractedReceiver = match[2].trim();
+        
+        const passer = actualPlayerNames.length > 0 
+          ? matchPlayerName(extractedPasser, actualPlayerNames) 
+          : extractedPasser;
+        const receiver = actualPlayerNames.length > 0 
+          ? matchPlayerName(extractedReceiver, actualPlayerNames) 
+          : extractedReceiver;
+        
+        conversions.passing[passer] = (conversions.passing[passer] || 0) + 1;
+        conversions.receiving[receiver] = (conversions.receiving[receiver] || 0) + 1;
+        console.log(`  🎯 Found 2-point conversion (pattern 4): ${passer} → ${receiver} (extracted: ${extractedPasser} → ${extractedReceiver})`);
+        continue;
+      }
+      
+      // Pattern 5: Just log if we see 2-point but can't parse it
+      if (text.includes('conversion') || text.includes('2-point') || text.includes('two-point')) {
+        console.log(`  ⚠️ Found 2-point conversion but couldn't parse: "${play.text}"`);
+      }
+    }
+  }
+  
+  // Log summary of what was found
+  const totalPassing = Object.values(conversions.passing).reduce((sum, count) => sum + count, 0);
+  const totalReceiving = Object.values(conversions.receiving).reduce((sum, count) => sum + count, 0);
+  console.log(`  📊 2-point conversion extraction complete: ${totalPassing} passing, ${totalReceiving} receiving`);
+  if (totalPassing > 0 || totalReceiving > 0) {
+    console.log(`  📊 Passing conversions:`, conversions.passing);
+    console.log(`  📊 Receiving conversions:`, conversions.receiving);
+  }
+  
+  return conversions;
+}
+
+function mapESPNStatsToDatabase(statCategory, stats, fieldGoalDistances, playerName, twoPointConversions = { passing: {}, receiving: {} }) {
   // Add debugging to see what we're getting
   console.log(`🔍 Mapping stats for ${playerName} in ${statCategory}:`, JSON.stringify(stats));
   
@@ -1749,8 +2024,19 @@ function mapESPNStatsToDatabase(statCategory, stats, fieldGoalDistances, playerN
     fumble_recoveries: 0, safeties: 0, blocked_kicks: 0,
     punt_return_touchdowns: 0, kickoff_return_touchdowns: 0,
     points_allowed: 0, field_goals_0_39: 0, field_goals_40_49: 0,
-    field_goals_50_plus: 0, field_goals_missed: 0, extra_points: 0, extra_points_missed: 0
+    field_goals_50_plus: 0, field_goals_missed: 0, extra_points: 0, extra_points_missed: 0,
+    two_point_conversions_passing: 0, two_point_conversions_receiving: 0
   };
+  
+  // Add 2-point conversions for this player (if any)
+  if (twoPointConversions.passing[playerName]) {
+    mappedStats.two_point_conversions_passing = twoPointConversions.passing[playerName];
+    console.log(`  🎯 2-point conversions (passing) for ${playerName}: ${mappedStats.two_point_conversions_passing}`);
+  }
+  if (twoPointConversions.receiving[playerName]) {
+    mappedStats.two_point_conversions_receiving = twoPointConversions.receiving[playerName];
+    console.log(`  🎯 2-point conversions (receiving) for ${playerName}: ${mappedStats.two_point_conversions_receiving}`);
+  }
   
   // ESPN now provides stats as arrays with specific meanings for each category
   // Based on our test, the structure is different from before
