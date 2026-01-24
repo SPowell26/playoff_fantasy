@@ -74,6 +74,10 @@ export const calculatePlayerScore = (player, scoringRules) => {
   totalScore += (stats.receptions || 0) * (scoringRules.PPR || scoringRules.receptionPoints || 1); // Points per reception
   totalScore += (stats.fumbles || 0) * (scoringRules.fumbles || 0);
   
+  // 2-point conversions (2 points each for passer and receiver)
+  totalScore += (stats.twoPointConversionsPassing || 0) * 2;
+  totalScore += (stats.twoPointConversionsReceiving || 0) * 2;
+  
   // Bonus points for milestones (boolean multipliers)
   if (passingYards >= 300) totalScore += 3; // 3 points for 300+ passing yards
   if (rushingYards >= 100) totalScore += 3; // 3 points for 100+ rushing yards

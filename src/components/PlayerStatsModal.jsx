@@ -64,6 +64,8 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
         punt_return_touchdowns: stats.puntReturnTD || 0,
         kickoff_return_touchdowns: stats.kickoffReturnTD || 0,
         points_allowed: stats.pointsAllowed || 0,
+        two_point_conversions_passing: stats.twoPointConversionsPassing || 0,
+        two_point_conversions_receiving: stats.twoPointConversionsReceiving || 0,
         team_win: stats.teamWin || stats.team_win || false,
         teamWin: stats.teamWin || stats.team_win || false
       }]
@@ -111,6 +113,9 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
     if (pos !== 'D/ST' && pos !== 'DEF') {
       total += (stats.interceptions || 0) * -2;
     }
+    // 2-point conversions (2 points each for passer and receiver)
+    total += (stats.two_point_conversions_passing || 0) * 2;
+    total += (stats.two_point_conversions_receiving || 0) * 2;
     // Bonus: 3 points for 300+ passing yards
     if (passingYards >= 300) total += 3;
     
@@ -233,7 +238,7 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
                   <div>
                     {/* Passing Stats - Show if any passing stats exist, but NOT for D/ST players */}
                     {(player.position !== 'D/ST' && player.position !== 'DEF') &&
-                     ((playerStats.stats[0].passing_yards || 0) > 0 || (playerStats.stats[0].passing_touchdowns || 0) > 0 || (playerStats.stats[0].interceptions || 0) > 0) && (
+                     ((playerStats.stats[0].passing_yards || 0) > 0 || (playerStats.stats[0].passing_touchdowns || 0) > 0 || (playerStats.stats[0].interceptions || 0) > 0 || (playerStats.stats[0].two_point_conversions_passing || 0) > 0) && (
                       <div className="mb-4">
                         <h4 className="font-semibold text-white mb-2 border-b border-gray-600 pb-1">Passing</h4>
                         <div className="space-y-1 text-sm">
@@ -266,6 +271,14 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
                               <span className="text-gray-300">Interceptions: {playerStats.stats[0].interceptions}</span>
                               <span className="text-red-400 font-medium">
                                 {(playerStats.stats[0].interceptions * -2).toFixed(2)} pts
+                              </span>
+                            </div>
+                          )}
+                          {playerStats.stats[0].two_point_conversions_passing > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-300">2-Point Conversions (Passing): {playerStats.stats[0].two_point_conversions_passing}</span>
+                              <span className="text-green-400 font-medium">
+                                {(playerStats.stats[0].two_point_conversions_passing * 2).toFixed(2)} pts
                               </span>
                             </div>
                           )}
@@ -307,7 +320,7 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
                     )}
 
                     {/* Receiving Stats - Show if any receiving stats exist */}
-                    {((playerStats.stats[0].receiving_yards || 0) > 0 || (playerStats.stats[0].receiving_touchdowns || 0) > 0 || (playerStats.stats[0].receptions || 0) > 0) && (
+                    {((playerStats.stats[0].receiving_yards || 0) > 0 || (playerStats.stats[0].receiving_touchdowns || 0) > 0 || (playerStats.stats[0].receptions || 0) > 0 || (playerStats.stats[0].two_point_conversions_receiving || 0) > 0) && (
                       <div className="mb-4">
                         <h4 className="font-semibold text-white mb-2 border-b border-gray-600 pb-1">Receiving</h4>
                         <div className="space-y-1 text-sm">
@@ -340,6 +353,14 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
                               <span className="text-gray-300">Receiving TDs: {playerStats.stats[0].receiving_touchdowns}</span>
                               <span className="text-green-400 font-medium">
                                 {(playerStats.stats[0].receiving_touchdowns * 6).toFixed(2)} pts
+                              </span>
+                            </div>
+                          )}
+                          {playerStats.stats[0].two_point_conversions_receiving > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-300">2-Point Conversions (Receiving): {playerStats.stats[0].two_point_conversions_receiving}</span>
+                              <span className="text-green-400 font-medium">
+                                {(playerStats.stats[0].two_point_conversions_receiving * 2).toFixed(2)} pts
                               </span>
                             </div>
                           )}
