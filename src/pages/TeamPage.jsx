@@ -277,10 +277,14 @@ const TeamPage = () => {
     }
     
     // Add D/ST scoring rules to ensure consistent scoring
+    // IMPORTANT: Preserve offensive interceptions rule (-2) - don't overwrite with defensive rule (+2)
     scoringRules = {
         ...scoringRules,
         sacks: 1,
-        interceptions: 2, // For D/ST interceptions
+        // Keep offensive interceptions as -2 (for QBs throwing INTs)
+        interceptions: scoringRules.interceptions || -2, // Preserve offensive interceptions rule
+        // D/ST interceptions (made) = +2 points each (separate from offensive interceptions thrown)
+        defensiveInterceptions: 2,
         fumbleRecoveries: 1, // Fixed: 1 point, not 2
         safeties: 2,
         blockedKicks: 2,

@@ -62,7 +62,11 @@ export const calculatePlayerScore = (player, scoringRules) => {
   
   totalScore += passingYards * (scoringRules.passingYards || 0);
   totalScore += (stats.passingTD || 0) * (scoringRules.passingTD || 0);
-  totalScore += (stats.interceptions || 0) * (scoringRules.interceptions || 0);
+  // Only apply offensive interceptions (thrown) to offensive players, not D/ST
+  // D/ST interceptions are handled in the defensive section below
+  if (position !== 'D/ST' && position !== 'DEF') {
+    totalScore += (stats.interceptions || 0) * (scoringRules.interceptions || 0);
+  }
   totalScore += rushingYards * (scoringRules.rushingYards || 0);
   totalScore += (stats.rushingTD || 0) * (scoringRules.rushingTD || 0);
   totalScore += receivingYards * (scoringRules.receivingYards || 0);
@@ -90,7 +94,10 @@ export const calculatePlayerScore = (player, scoringRules) => {
   // Defense stats (only for D/ST players)
   if (position === 'D/ST' || position === 'DEF') {
     totalScore += (stats.sacks || 0) * (scoringRules.sacks || 1);
-    totalScore += (stats.interceptions || 0) * (scoringRules.interceptions || 2);
+    // D/ST interceptions are defensive (made) = +2 points each
+    // Use defensive interception points if available, otherwise default to +2
+    const defensiveInterceptionPoints = scoringRules.defensiveInterceptions || scoringRules.interceptionsDefense || 2;
+    totalScore += (stats.interceptions || 0) * defensiveInterceptionPoints;
     totalScore += (stats.fumbleRecoveries || 0) * (scoringRules.fumbleRecoveries || 1); // Fixed: should be 1 point, not 2
     totalScore += (stats.safeties || 0) * (scoringRules.safeties || 2);
     totalScore += (stats.blockedKicks || 0) * (scoringRules.blockedKicks || 2);

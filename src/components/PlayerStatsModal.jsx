@@ -34,7 +34,11 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
       stats: [{
         passing_yards: stats.passingYards || 0,
         passing_touchdowns: stats.passingTD || 0,
-        interceptions: stats.interceptions || 0,
+        // For D/ST: interceptions from API are defensive (made), not offensive (thrown)
+        // For offensive players: interceptions from API are offensive (thrown)
+        interceptions: (playerWithStats.position === 'D/ST' || playerWithStats.position === 'DEF') 
+          ? 0  // D/ST has no offensive interceptions
+          : (stats.interceptions || 0),  // Offensive players have interceptions thrown
         rushing_yards: stats.rushingYards || 0,
         rushing_touchdowns: stats.rushingTD || 0,
         receiving_yards: stats.receivingYards || 0,
@@ -48,10 +52,15 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
         extra_points: stats.extraPointsMade || 0,
         extra_points_missed: stats.extraPointsMissed || 0,
         sacks: stats.sacks || 0,
-        interceptions_defense: stats.interceptions || 0,
+        // For D/ST: interceptions from API are defensive (made)
+        // For offensive players: no defensive interceptions
+        interceptions_defense: (playerWithStats.position === 'D/ST' || playerWithStats.position === 'DEF')
+          ? (stats.interceptions || 0)  // D/ST: defensive interceptions (made)
+          : 0,  // Offensive players have no defensive interceptions
         fumble_recoveries: stats.fumbleRecoveries || 0,
         safeties: stats.safeties || 0,
         blocked_kicks: stats.blockedKicks || 0,
+        defensive_touchdowns: stats.defensiveTDs || 0,
         punt_return_touchdowns: stats.puntReturnTD || 0,
         kickoff_return_touchdowns: stats.kickoffReturnTD || 0,
         points_allowed: stats.pointsAllowed || 0,
@@ -95,9 +104,13 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
     const receivingYards = stats.receiving_yards || 0;
     
     // Passing stats (all players get these if they have passing stats)
+    // But D/ST should not get offensive interceptions (thrown) - only defensive interceptions (made)
     total += passingYards * 0.04;
     total += (stats.passing_touchdowns || 0) * 4;
-    total += (stats.interceptions || 0) * -2;
+    // Only apply offensive interceptions (thrown) to offensive players, not D/ST
+    if (pos !== 'D/ST' && pos !== 'DEF') {
+      total += (stats.interceptions || 0) * -2;
+    }
     // Bonus: 3 points for 300+ passing yards
     if (passingYards >= 300) total += 3;
     
@@ -133,6 +146,7 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
       total += (stats.fumble_recoveries || 0) * 1; // Fixed: 1 point, not 2
       total += (stats.safeties || 0) * 2;
       total += (stats.blocked_kicks || 0) * 2;
+      total += (stats.defensive_touchdowns || 0) * 6; // Defensive/special teams TDs (6 points each)
       total += (stats.punt_return_touchdowns || 0) * 6;
       total += (stats.kickoff_return_touchdowns || 0) * 6;
       // Points allowed (only for D/ST)
@@ -217,8 +231,9 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
               <div className="space-y-3">
                 {playerStats.stats && playerStats.stats.length > 0 && (
                   <div>
-                    {/* Passing Stats - Show if any passing stats exist */}
-                    {((playerStats.stats[0].passing_yards || 0) > 0 || (playerStats.stats[0].passing_touchdowns || 0) > 0 || (playerStats.stats[0].interceptions || 0) > 0) && (
+                    {/* Passing Stats - Show if any passing stats exist, but NOT for D/ST players */}
+                    {(player.position !== 'D/ST' && player.position !== 'DEF') &&
+                     ((playerStats.stats[0].passing_yards || 0) > 0 || (playerStats.stats[0].passing_touchdowns || 0) > 0 || (playerStats.stats[0].interceptions || 0) > 0) && (
                       <div className="mb-4">
                         <h4 className="font-semibold text-white mb-2 border-b border-gray-600 pb-1">Passing</h4>
                         <div className="space-y-1 text-sm">
@@ -400,6 +415,7 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
                       (playerStats.stats[0].fumble_recoveries || 0) > 0 || 
                       (playerStats.stats[0].safeties || 0) > 0 || 
                       (playerStats.stats[0].blocked_kicks || 0) > 0 || 
+                      (playerStats.stats[0].defensive_touchdowns || 0) > 0 ||
                       (playerStats.stats[0].punt_return_touchdowns || 0) > 0 || 
                       (playerStats.stats[0].kickoff_return_touchdowns || 0) > 0 || 
                       (playerStats.stats[0].points_allowed !== undefined && playerStats.stats[0].points_allowed !== null) || 
@@ -445,6 +461,14 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
                               <span className="text-gray-300">Blocked Kicks: {playerStats.stats[0].blocked_kicks}</span>
                               <span className="text-green-400 font-medium">
                                 {(playerStats.stats[0].blocked_kicks * 2).toFixed(2)} pts
+                              </span>
+                            </div>
+                          )}
+                          {playerStats.stats[0].defensive_touchdowns > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-300">Defensive TDs: {playerStats.stats[0].defensive_touchdowns}</span>
+                              <span className="text-green-400 font-medium">
+                                {(playerStats.stats[0].defensive_touchdowns * 6).toFixed(2)} pts
                               </span>
                             </div>
                           )}

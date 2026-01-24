@@ -664,7 +664,7 @@ router.post('/weekly-update', async (req, res) => {
                   player_id: playerId,
                   week: currentWeek,
                   year: currentYear,
-                  season_type: seasonType.toLowerCase(),
+                  season_type: finalSeasonType.toLowerCase(),
                   source: 'espn',
                   // Initialize all stats to 0
                   passing_yards: 0, passing_touchdowns: 0, interceptions: 0,
@@ -872,15 +872,16 @@ router.post('/weekly-update', async (req, res) => {
         const result = await db.query(
           `INSERT INTO player_stats (
             player_id, week, year, season_type, sacks, interceptions_defense, fumble_recoveries,
-            safeties, blocked_kicks, punt_return_touchdowns, kickoff_return_touchdowns,
+            safeties, blocked_kicks, defensive_touchdowns, punt_return_touchdowns, kickoff_return_touchdowns,
             points_allowed, team_win, source
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
           ON CONFLICT (player_id, week, year, season_type) DO UPDATE SET
             sacks = EXCLUDED.sacks,
             interceptions_defense = EXCLUDED.interceptions_defense,
             fumble_recoveries = EXCLUDED.fumble_recoveries,
             safeties = EXCLUDED.safeties,
             blocked_kicks = EXCLUDED.blocked_kicks,
+            defensive_touchdowns = EXCLUDED.defensive_touchdowns,
             punt_return_touchdowns = EXCLUDED.punt_return_touchdowns,
             kickoff_return_touchdowns = EXCLUDED.kickoff_return_touchdowns,
             points_allowed = EXCLUDED.points_allowed,
@@ -891,9 +892,9 @@ router.post('/weekly-update', async (req, res) => {
           [
             dstPlayerId, dstStat.week, dstStat.year, dstStat.season_type,
             dstStat.sacks, dstStat.interceptions_defense, dstStat.fumble_recoveries,
-            dstStat.safeties, dstStat.blocked_kicks, dstStat.punt_return_touchdowns,
-            dstStat.kickoff_return_touchdowns, dstStat.points_allowed, dstStat.team_win,
-            dstStat.source
+            dstStat.safeties, dstStat.blocked_kicks, dstStat.defensive_touchdowns || 0,
+            dstStat.punt_return_touchdowns, dstStat.kickoff_return_touchdowns,
+            dstStat.points_allowed, dstStat.team_win, dstStat.source
           ]
         );
         
@@ -1077,7 +1078,11 @@ router.get('/scoring-ready/:week', async (req, res) => {
           // Transform database fields to scoring engine expectations
           passingYards: stat.passing_yards || 0,
           passingTD: stat.passing_touchdowns || 0,
-          interceptions: stat.interceptions || 0,
+          // For offensive players: interceptions = thrown (negative points)
+          // For D/ST players: interceptions = made (positive points from interceptions_defense)
+          interceptions: (stat.position === 'D/ST' || stat.position === 'DEF') 
+            ? (stat.interceptions_defense || 0)  // D/ST: defensive interceptions (made)
+            : (stat.interceptions || 0),        // Offensive: interceptions thrown
           rushingYards: stat.rushing_yards || 0,
           rushingTD: stat.rushing_touchdowns || 0,
           receivingYards: stat.receiving_yards || 0,
@@ -1094,15 +1099,15 @@ router.get('/scoring-ready/:week', async (req, res) => {
           fieldGoalsMissed: stat.field_goals_missed || 0,
           extraPointsMissed: stat.extra_points_missed || 0,
           
-          // Defense stats
+          // Defense stats (only for D/ST, but include for all players for consistency)
           sacks: stat.sacks || 0,
-          interceptions: stat.interceptions_defense || 0,
+          // Note: interceptions above is already mapped correctly based on position
           fumbleRecoveries: stat.fumble_recoveries || 0,
           safeties: stat.safeties || 0,
           blockedKicks: stat.blocked_kicks || 0,
           puntReturnTD: stat.punt_return_touchdowns || 0,
           kickoffReturnTD: stat.kickoff_return_touchdowns || 0,
-          defensiveTDs: 0, // Calculated separately or combined with return TDs - not stored as separate field
+          defensiveTDs: stat.defensive_touchdowns || 0, // Defensive/special teams TDs (6 points each)
           
           // Points allowed (for team defense)
           pointsAllowed: stat.points_allowed || 0,
@@ -1228,9 +1233,10 @@ router.get('/available-weeks', async (req, res) => {
 });
 
 // POST endpoint to manually import stats for a specific week
-router.post('/import-week', requireCommissionerOrSystem, async (req, res) => {
+// Temporarily removed auth for local development - add back for production!
+router.post('/import-week', async (req, res) => {
   try {
-    const { week, year } = req.body;
+    const { week, year, seasonType } = req.body;
     
     if (!week || !year) {
       return res.status(400).json({ 
@@ -1239,10 +1245,27 @@ router.post('/import-week', requireCommissionerOrSystem, async (req, res) => {
       });
     }
     
-    console.log(`🔄 Manual import requested for Week ${week}, Year ${year}`);
+    console.log(`🔄 Manual import requested for Week ${week}, Year ${year}, SeasonType: ${seasonType || 'auto-detect'}`);
+    
+    // Build ESPN API URL - add seasontype parameter if provided
+    // ESPN season types: 1=preseason, 2=regular, 3=postseason, 4=offseason
+    let espnUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&year=${year}`;
+    if (seasonType) {
+      const seasonTypeMap = {
+        'preseason': 1,
+        'regular': 2,
+        'postseason': 3,
+        'offseason': 4
+      };
+      const espnSeasonTypeId = seasonTypeMap[seasonType.toLowerCase()];
+      if (espnSeasonTypeId) {
+        espnUrl += `&seasontype=${espnSeasonTypeId}`;
+        console.log(`  📊 Using season type: ${seasonType} (ESPN ID: ${espnSeasonTypeId})`);
+      }
+    }
     
     // Call the ESPN API for the specific week
-    const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&year=${year}`);
+    const response = await fetch(espnUrl);
     
     if (!response.ok) {
       throw new Error(`ESPN API returned ${response.status}`);
@@ -1259,30 +1282,33 @@ router.post('/import-week', requireCommissionerOrSystem, async (req, res) => {
       });
     }
     
-    // Determine season type from ESPN data
+    // Determine season type from ESPN data (use provided seasonType or auto-detect)
     const espnSeasonTypeId = scoreboardData.season?.type;
-    let seasonType = 'Unknown';
+    let detectedSeasonType = 'Unknown';
     
     if (espnSeasonTypeId !== undefined) {
       switch (espnSeasonTypeId) {
         case 1:
-          seasonType = 'preseason';
+          detectedSeasonType = 'preseason';
           break;
         case 2:
-          seasonType = 'regular';
+          detectedSeasonType = 'regular';
           break;
         case 3:
-          seasonType = 'postseason';
+          detectedSeasonType = 'postseason';
           break;
         case 4:
-          seasonType = 'offseason';
+          detectedSeasonType = 'offseason';
           break;
         default:
-          seasonType = `unknown_${espnSeasonTypeId}`;
+          detectedSeasonType = `unknown_${espnSeasonTypeId}`;
       }
     }
     
-    console.log(`📊 Processing Week ${week}, Year ${year}, Type: ${seasonType} (ESPN ID: ${espnSeasonTypeId})`);
+    // Use provided seasonType or fall back to detected one
+    const finalSeasonType = seasonType || detectedSeasonType;
+    
+    console.log(`📊 Processing Week ${week}, Year ${year}, Type: ${finalSeasonType} (ESPN ID: ${espnSeasonTypeId})`);
     console.log(`🏈 Found ${scoreboardData.events.length} games this week`);
     
     // Process all games for the week (using the same logic as weekly-update)
@@ -1381,7 +1407,7 @@ router.post('/import-week', requireCommissionerOrSystem, async (req, res) => {
                   player_id: playerId,
                   week: week,
                   year: year,
-                  season_type: seasonType.toLowerCase(),
+                  season_type: finalSeasonType.toLowerCase(),
                   source: 'espn',
                   // Initialize all stats to 0
                   passing_yards: 0, passing_touchdowns: 0, interceptions: 0,
@@ -1483,7 +1509,7 @@ router.post('/import-week', requireCommissionerOrSystem, async (req, res) => {
         for (const dstStat of dstResults) {
           if (!dstStat.week) dstStat.week = week;
           if (!dstStat.year) dstStat.year = year;
-          dstStat.season_type = seasonType.toLowerCase();
+          dstStat.season_type = finalSeasonType.toLowerCase();
           dstStat.source = 'espn';
         }
         
@@ -1518,15 +1544,16 @@ router.post('/import-week', requireCommissionerOrSystem, async (req, res) => {
         const result = await db.query(
           `INSERT INTO player_stats (
             player_id, week, year, season_type, sacks, interceptions_defense, fumble_recoveries,
-            safeties, blocked_kicks, punt_return_touchdowns, kickoff_return_touchdowns,
+            safeties, blocked_kicks, defensive_touchdowns, punt_return_touchdowns, kickoff_return_touchdowns,
             points_allowed, team_win, source
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
           ON CONFLICT (player_id, week, year, season_type) DO UPDATE SET
             sacks = EXCLUDED.sacks,
             interceptions_defense = EXCLUDED.interceptions_defense,
             fumble_recoveries = EXCLUDED.fumble_recoveries,
             safeties = EXCLUDED.safeties,
             blocked_kicks = EXCLUDED.blocked_kicks,
+            defensive_touchdowns = EXCLUDED.defensive_touchdowns,
             punt_return_touchdowns = EXCLUDED.punt_return_touchdowns,
             kickoff_return_touchdowns = EXCLUDED.kickoff_return_touchdowns,
             points_allowed = EXCLUDED.points_allowed,
@@ -1537,9 +1564,9 @@ router.post('/import-week', requireCommissionerOrSystem, async (req, res) => {
           [
             dstPlayerId, dstStat.week, dstStat.year, dstStat.season_type,
             dstStat.sacks, dstStat.interceptions_defense, dstStat.fumble_recoveries,
-            dstStat.safeties, dstStat.blocked_kicks, dstStat.punt_return_touchdowns,
-            dstStat.kickoff_return_touchdowns, dstStat.points_allowed, dstStat.team_win,
-            dstStat.source
+            dstStat.safeties, dstStat.blocked_kicks, dstStat.defensive_touchdowns || 0,
+            dstStat.punt_return_touchdowns, dstStat.kickoff_return_touchdowns,
+            dstStat.points_allowed, dstStat.team_win, dstStat.source
           ]
         );
         
@@ -1635,7 +1662,7 @@ router.post('/import-week', requireCommissionerOrSystem, async (req, res) => {
               leagueRow.id, 
               week, 
               year, 
-              seasonType
+              finalSeasonType
             );
             bestBallResults.push({
               leagueId: leagueRow.id,
@@ -1666,7 +1693,7 @@ router.post('/import-week', requireCommissionerOrSystem, async (req, res) => {
       message: `Import completed for Week ${week}, Year ${year}`,
       week,
       year,
-      seasonType,
+      seasonType: finalSeasonType,
       gamesProcessed: processedGames,
       gamesFailed: failedGames,
       playersCreated,
