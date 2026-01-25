@@ -429,7 +429,13 @@ export async function getSeasonTotals(db, leagueId, year, seasonType) {
           // Calculate Best Ball weekly score using latest scoring logic
           const bestBallResult = calculateBestBallWeeklyScore(teamPlayers);
           const teamData = teamScores.get(team.id);
-          teamData.weeklyScores.push(bestBallResult.weeklyScore);
+          const weeklyScore = bestBallResult.weeklyScore || 0;
+          teamData.weeklyScores.push(weeklyScore);
+          
+          // Debug logging for first team
+          if (team.id === teamsResult.rows[0].id) {
+            console.log(`  📊 Week ${week} - ${team.name}: ${weeklyScore.toFixed(2)} points (${teamPlayers.length} players)`);
+          }
           
         } catch (error) {
           console.error(`Error calculating score for team ${team.id} week ${week}:`, error);
@@ -439,12 +445,30 @@ export async function getSeasonTotals(db, leagueId, year, seasonType) {
     
     // Convert to result format
     const results = Array.from(teamScores.values()).map(teamData => {
-      const weeklyScores = teamData.weeklyScores.filter(score => score > 0); // Only count weeks with scores
+      // Store weekly scores with week numbers for debugging
+      const weeklyScoresWithWeeks = [];
+      for (let i = 0; i < weeks.length && i < teamData.weeklyScores.length; i++) {
+        const score = teamData.weeklyScores[i];
+        // Only include weeks where team actually has stats (score > 0 or team has players with stats)
+        if (score > 0) {
+          weeklyScoresWithWeeks.push({ week: weeks[i], score: score });
+        }
+      }
+      
+      const weeklyScores = weeklyScoresWithWeeks.map(w => w.score);
       const weeksPlayed = weeklyScores.length;
       const seasonTotal = weeklyScores.reduce((sum, score) => sum + score, 0);
       const averageScore = weeksPlayed > 0 ? seasonTotal / weeksPlayed : null;
       const bestWeek = weeklyScores.length > 0 ? Math.max(...weeklyScores) : null;
       const worstWeek = weeklyScores.length > 0 ? Math.min(...weeklyScores) : null;
+      
+      // Log for debugging
+      console.log(`📊 Season totals for ${teamData.team_name}:`, {
+        weeks: weeklyScoresWithWeeks.map(w => `Week ${w.week}: ${w.score.toFixed(2)}`).join(', '),
+        total: seasonTotal.toFixed(2),
+        weeksCount: weeksPlayed,
+        weeksIncluded: weeklyScoresWithWeeks.map(w => w.week).join(', ')
+      });
       
       return {
         team_id: teamData.team_id,
@@ -454,7 +478,9 @@ export async function getSeasonTotals(db, leagueId, year, seasonType) {
         season_total: Math.round(seasonTotal * 100) / 100, // Round to 2 decimals
         average_weekly_score: averageScore ? Math.round(averageScore * 100) / 100 : null,
         best_weekly_score: bestWeek ? Math.round(bestWeek * 100) / 100 : null,
-        worst_weekly_score: worstWeek ? Math.round(worstWeek * 100) / 100 : null
+        worst_weekly_score: worstWeek ? Math.round(worstWeek * 100) / 100 : null,
+        // Include weekly breakdown for debugging (can be removed later)
+        _weekly_breakdown: weeklyScoresWithWeeks
       };
     });
     

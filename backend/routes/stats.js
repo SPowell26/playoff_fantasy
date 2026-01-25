@@ -1236,11 +1236,17 @@ router.get('/season-totals/:leagueId', async (req, res) => {
     const { getSeasonTotals } = await import('../services/best-ball-scoring-service.js');
     const seasonTotals = await getSeasonTotals(db, parseInt(leagueId), parseInt(year), seasonType);
     
+    // Include weekly breakdowns in response for debugging
+    const seasonTotalsWithBreakdown = seasonTotals.map(team => ({
+      ...team,
+      weekly_breakdown: team._weekly_breakdown || [] // Include weekly scores breakdown
+    }));
+    
     res.json({
       leagueId: parseInt(leagueId),
       year: parseInt(year),
       seasonType,
-      seasonTotals,
+      seasonTotals: seasonTotalsWithBreakdown,
       timestamp: new Date().toISOString()
     });
     

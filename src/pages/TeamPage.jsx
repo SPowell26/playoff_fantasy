@@ -76,6 +76,14 @@ const TeamPage = () => {
                 const data = await response.json();
                 const teamStats = data.seasonTotals?.find(st => st.team_id === team.id);
                 console.log('✅ Team season stats:', teamStats);
+                
+                // Log weekly breakdown to console for debugging
+                if (teamStats?.weekly_breakdown) {
+                    console.log('📊 Weekly Breakdown:', teamStats.weekly_breakdown);
+                    const manualTotal = teamStats.weekly_breakdown.reduce((sum, week) => sum + week.score, 0);
+                    console.log('🔢 Manual sum of weeks:', manualTotal.toFixed(2), 'vs Season Total:', teamStats.season_total);
+                }
+                
                 setTeamSeasonStats(teamStats);
                 
                 // Calculate rank - season totals are already sorted by total DESC
@@ -831,6 +839,17 @@ const TeamPage = () => {
                                         : '0.0'}
                                 </span>
                             </div>
+                            {teamSeasonStats?.weekly_breakdown && teamSeasonStats.weekly_breakdown.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-gray-700">
+                                    <div className="text-xs text-gray-400 mb-1">Weekly Breakdown:</div>
+                                    {teamSeasonStats.weekly_breakdown.map((week, idx) => (
+                                        <div key={idx} className="flex justify-between text-xs text-gray-300">
+                                            <span>Week {week.week}:</span>
+                                            <span>{week.score.toFixed(2)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                             <div className="flex justify-between items-center">
                                 <span className="text-gray-300">Weeks Played:</span>
                                 <span className="text-white font-medium">
