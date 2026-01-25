@@ -78,6 +78,22 @@ export const calculatePlayerScore = (player, scoringRules) => {
   totalScore += (stats.twoPointConversionsPassing || 0) * 2;
   totalScore += (stats.twoPointConversionsReceiving || 0) * 2;
   
+  // Return touchdowns (for individual players - WR/RB/KR/PR who return kicks)
+  // Note: D/ST return TDs are handled in the Defense section below
+  if (position && position !== 'D/ST' && position !== 'DEF') {
+    try {
+      const puntReturnTDs = stats.puntReturnTD || stats.punt_return_touchdowns || 0;
+      const kickoffReturnTDs = stats.kickoffReturnTD || stats.kickoff_return_touchdowns || 0;
+      const puntReturnPoints = scoringRules?.puntReturnTD || scoringRules?.defensive?.specialTeams?.puntReturnTDPoints || 6;
+      const kickoffReturnPoints = scoringRules?.kickoffReturnTD || scoringRules?.defensive?.specialTeams?.kickoffReturnTDPoints || 6;
+      totalScore += puntReturnTDs * puntReturnPoints;
+      totalScore += kickoffReturnTDs * kickoffReturnPoints;
+    } catch (returnError) {
+      console.error('Error calculating return TDs:', returnError);
+      // Continue without return TDs if there's an error
+    }
+  }
+  
   // Bonus points for milestones (boolean multipliers)
   if (passingYards >= 300) totalScore += 3; // 3 points for 300+ passing yards
   if (rushingYards >= 100) totalScore += 3; // 3 points for 100+ rushing yards

@@ -97,87 +97,102 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
   // Calculate total fantasy points from individual stats (ALL stats count regardless of position)
   // But defensive stats (sacks, points_allowed, team_win) only count for D/ST players
   const calculateTotalPoints = (stats, playerPosition) => {
-    if (!stats) return 0;
-    
-    const pos = playerPosition || player?.position || '';
-    let total = 0;
-    const passingYards = stats.passing_yards || 0;
-    const rushingYards = stats.rushing_yards || 0;
-    const receivingYards = stats.receiving_yards || 0;
-    
-    // Passing stats (all players get these if they have passing stats)
-    // But D/ST should not get offensive interceptions (thrown) - only defensive interceptions (made)
-    total += passingYards * 0.04;
-    total += (stats.passing_touchdowns || 0) * 4;
-    // Only apply offensive interceptions (thrown) to offensive players, not D/ST
-    if (pos !== 'D/ST' && pos !== 'DEF') {
-      total += (stats.interceptions || 0) * -2;
-    }
-    // 2-point conversions (2 points each for passer and receiver)
-    total += (stats.two_point_conversions_passing || 0) * 2;
-    total += (stats.two_point_conversions_receiving || 0) * 2;
-    // Bonus: 3 points for 300+ passing yards
-    if (passingYards >= 300) total += 3;
-    
-    // Rushing stats (all players get these if they have rushing stats)
-    total += rushingYards * 0.1;
-    total += (stats.rushing_touchdowns || 0) * 6;
-    // Bonus: 3 points for 100+ rushing yards
-    if (rushingYards >= 100) total += 3;
-    
-    // Receiving stats (all players get these if they have receiving stats)
-    total += (stats.receptions || 0) * 1; // PPR
-    total += receivingYards * 0.1;
-    total += (stats.receiving_touchdowns || 0) * 6;
-    // Bonus: 3 points for 100+ receiving yards
-    if (receivingYards >= 100) total += 3;
-    
-    // Fumbles lost penalty (all players)
-    total += (stats.fumbles_lost || 0) * -2;
-    
-    // Kicking stats (all players get these if they have kicking stats)
-    total += (stats.field_goals_0_39 || 0) * 3;
-    total += (stats.field_goals_40_49 || 0) * 4;
-    total += (stats.field_goals_50_plus || 0) * 5;
-    total += (stats.extra_points || 0) * 1;
-    // Penalties for missed kicks
-    total += (stats.field_goals_missed || 0) * -1;
-    total += (stats.extra_points_missed || 0) * -1;
-    
-    // Defense stats (ONLY for D/ST players - team-level stats)
-    if (pos === 'D/ST' || pos === 'DEF') {
-      total += (stats.sacks || 0) * 1;
-      total += (stats.interceptions_defense || 0) * 2;
-      total += (stats.fumble_recoveries || 0) * 1; // Fixed: 1 point, not 2
-      total += (stats.safeties || 0) * 2;
-      total += (stats.blocked_kicks || 0) * 2;
-      total += (stats.defensive_touchdowns || 0) * 6; // Defensive/special teams TDs (6 points each)
-      total += (stats.punt_return_touchdowns || 0) * 6;
-      total += (stats.kickoff_return_touchdowns || 0) * 6;
-      // Points allowed (only for D/ST)
-      if (stats.points_allowed !== undefined && stats.points_allowed !== null) {
-        total += getPointsAllowedInfo(stats.points_allowed).score;
+    try {
+      if (!stats) return 0;
+      
+      const pos = playerPosition || player?.position || '';
+      let total = 0;
+      const passingYards = stats.passing_yards || 0;
+      const rushingYards = stats.rushing_yards || 0;
+      const receivingYards = stats.receiving_yards || 0;
+      
+      // Passing stats (all players get these if they have passing stats)
+      // But D/ST should not get offensive interceptions (thrown) - only defensive interceptions (made)
+      total += passingYards * 0.04;
+      total += (stats.passing_touchdowns || 0) * 4;
+      // Only apply offensive interceptions (thrown) to offensive players, not D/ST
+      if (pos !== 'D/ST' && pos !== 'DEF') {
+        total += (stats.interceptions || 0) * -2;
       }
-      // Team win (6 points if team won) - only for D/ST
-      const teamWin = stats.team_win === true || stats.teamWin === true || 
-                      stats.team_win === 1 || stats.teamWin === 1 ||
-                      Boolean(stats.team_win) || Boolean(stats.teamWin);
-      if (teamWin) {
-        total += 6;
+      // 2-point conversions (2 points each for passer and receiver)
+      total += (stats.two_point_conversions_passing || 0) * 2;
+      total += (stats.two_point_conversions_receiving || 0) * 2;
+      // Return touchdowns (for individual players - WR/RB/KR/PR who return kicks)
+      // Note: D/ST return TDs are handled in the Defense section below
+      if (pos !== 'D/ST' && pos !== 'DEF') {
+        // Handle both camelCase and snake_case field names
+        const puntReturnTDs = stats.punt_return_touchdowns || stats.puntReturnTD || 0;
+        const kickoffReturnTDs = stats.kickoff_return_touchdowns || stats.kickoffReturnTD || 0;
+        total += puntReturnTDs * 6;
+        total += kickoffReturnTDs * 6;
       }
+      // Bonus: 3 points for 300+ passing yards
+      if (passingYards >= 300) total += 3;
+      
+      // Rushing stats (all players get these if they have rushing stats)
+      total += rushingYards * 0.1;
+      total += (stats.rushing_touchdowns || 0) * 6;
+      // Bonus: 3 points for 100+ rushing yards
+      if (rushingYards >= 100) total += 3;
+      
+      // Receiving stats (all players get these if they have receiving stats)
+      total += (stats.receptions || 0) * 1; // PPR
+      total += receivingYards * 0.1;
+      total += (stats.receiving_touchdowns || 0) * 6;
+      // Bonus: 3 points for 100+ receiving yards
+      if (receivingYards >= 100) total += 3;
+      
+      // Fumbles lost penalty (all players)
+      total += (stats.fumbles_lost || 0) * -2;
+      
+      // Kicking stats (all players get these if they have kicking stats)
+      total += (stats.field_goals_0_39 || 0) * 3;
+      total += (stats.field_goals_40_49 || 0) * 4;
+      total += (stats.field_goals_50_plus || 0) * 5;
+      total += (stats.extra_points || 0) * 1;
+      // Penalties for missed kicks
+      total += (stats.field_goals_missed || 0) * -1;
+      total += (stats.extra_points_missed || 0) * -1;
+      
+      // Defense stats (ONLY for D/ST players - team-level stats)
+      if (pos === 'D/ST' || pos === 'DEF') {
+        total += (stats.sacks || 0) * 1;
+        total += (stats.interceptions_defense || 0) * 2;
+        total += (stats.fumble_recoveries || 0) * 1; // Fixed: 1 point, not 2
+        total += (stats.safeties || 0) * 2;
+        total += (stats.blocked_kicks || 0) * 2;
+        total += (stats.defensive_touchdowns || 0) * 6; // Defensive/special teams TDs (6 points each)
+        total += (stats.punt_return_touchdowns || 0) * 6;
+        total += (stats.kickoff_return_touchdowns || 0) * 6;
+        // Points allowed (only for D/ST)
+        if (stats.points_allowed !== undefined && stats.points_allowed !== null) {
+          total += getPointsAllowedInfo(stats.points_allowed).score;
+        }
+        // Team win (6 points if team won) - only for D/ST
+        const teamWin = stats.team_win === true || stats.teamWin === true || 
+                        stats.team_win === 1 || stats.teamWin === 1 ||
+                        Boolean(stats.team_win) || Boolean(stats.teamWin);
+        if (teamWin) {
+          total += 6;
+        }
+      }
+      
+      return total;
+    } catch (error) {
+      console.error('Error in calculateTotalPoints:', error, { stats, playerPosition, player: player?.name });
+      return 0;
     }
-    
-    return total;
   };
 
   // Loading state when fetching stats
   useEffect(() => {
     if (isOpen && player && currentWeek) {
-      setLoading(!playerWithStats);
+      // Only show loading if we don't have stats yet
+      setLoading(!playerWithStats || !playerStats);
     } else {
       setLoading(false);
     }
-  }, [isOpen, player, currentWeek, playerWithStats]);
+  }, [isOpen, player, currentWeek, playerWithStats, playerStats]);
 
   if (!isOpen || !player) return null;
 
@@ -219,7 +234,15 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
             <div>
               <div className="mb-4 p-3 bg-gray-700 border border-gray-600 rounded-lg">
                 <h3 className="font-semibold text-lg text-center text-white">
-                  Total Points: {calculateTotalPoints(playerStats.stats?.[0], player.position).toFixed(2)}
+                  Total Points: {(() => {
+                    try {
+                      if (!playerStats?.stats?.[0]) return '0.00';
+                      return calculateTotalPoints(playerStats.stats[0], player.position).toFixed(2);
+                    } catch (error) {
+                      console.error('Error calculating total points:', error);
+                      return '0.00';
+                    }
+                  })()}
                 </h3>
                 {/* Debug: Show all raw stats */}
                 {process.env.NODE_ENV === 'development' && (
@@ -361,6 +384,32 @@ const PlayerStatsModal = ({ player, isOpen, onClose, week, year, seasonType: lea
                               <span className="text-gray-300">2-Point Conversions (Receiving): {playerStats.stats[0].two_point_conversions_receiving}</span>
                               <span className="text-green-400 font-medium">
                                 {(playerStats.stats[0].two_point_conversions_receiving * 2).toFixed(2)} pts
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Return Stats - Show for individual players (not D/ST) */}
+                    {(player.position !== 'D/ST' && player.position !== 'DEF') &&
+                     ((playerStats.stats[0].punt_return_touchdowns || 0) > 0 || (playerStats.stats[0].kickoff_return_touchdowns || 0) > 0) && (
+                      <div className="mb-4">
+                        <h4 className="font-semibold text-white mb-2 border-b border-gray-600 pb-1">Returns</h4>
+                        <div className="space-y-1 text-sm">
+                          {playerStats.stats[0].punt_return_touchdowns > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-300">Punt Return TDs: {playerStats.stats[0].punt_return_touchdowns}</span>
+                              <span className="text-green-400 font-medium">
+                                {(playerStats.stats[0].punt_return_touchdowns * 6).toFixed(2)} pts
+                              </span>
+                            </div>
+                          )}
+                          {playerStats.stats[0].kickoff_return_touchdowns > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-300">Kickoff Return TDs: {playerStats.stats[0].kickoff_return_touchdowns}</span>
+                              <span className="text-green-400 font-medium">
+                                {(playerStats.stats[0].kickoff_return_touchdowns * 6).toFixed(2)} pts
                               </span>
                             </div>
                           )}
