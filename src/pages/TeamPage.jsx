@@ -61,12 +61,11 @@ const TeamPage = () => {
         }
     }, [currentWeek, nflSeasonYear, league?.season_type]);
 
-    // Fetch season totals for this team
+    // Fetch season totals from backend (for rankings and consistency check)
     const fetchTeamSeasonStats = useCallback(async () => {
         if (!league?.id || !nflSeasonYear || !team?.id) return;
         
         try {
-            // Use league's season_type (already set above)
             const seasonTypeParam = seasonType;
             const response = await fetch(
                 `${API_URL}/api/stats/season-totals/${league.id}?year=${nflSeasonYear}&seasonType=${seasonTypeParam}`
@@ -75,21 +74,16 @@ const TeamPage = () => {
             if (response.ok) {
                 const data = await response.json();
                 const teamStats = data.seasonTotals?.find(st => st.team_id === team.id);
-                console.log('✅ Team season stats:', teamStats);
                 
-                // Log weekly breakdown to console for debugging
-                if (teamStats?.weekly_breakdown) {
-                    console.log('📊 Weekly Breakdown:', teamStats.weekly_breakdown);
-                    const manualTotal = teamStats.weekly_breakdown.reduce((sum, week) => sum + week.score, 0);
-                    console.log('🔢 Manual sum of weeks:', manualTotal.toFixed(2), 'vs Season Total:', teamStats.season_total);
-                }
-                
-                setTeamSeasonStats(teamStats);
-                
-                // Calculate rank - season totals are already sorted by total DESC
-                if (data.seasonTotals && teamStats) {
+                if (teamStats) {
+                    setTeamSeasonStats(teamStats);
+                    
+                    // Calculate rank - season totals are already sorted by total DESC
                     const rank = data.seasonTotals.findIndex(st => st.team_id === team.id) + 1;
                     setTeamRank(rank || null);
+                    
+                    // Log for debugging - compare backend vs frontend calculation
+                    console.log('📊 Backend season totals:', teamStats);
                 }
             }
         } catch (error) {
@@ -100,6 +94,60 @@ const TeamPage = () => {
     useEffect(() => {
         fetchTeamSeasonStats();
     }, [fetchTeamSeasonStats]);
+    
+    // Also calculate client-side for comparison/verification
+    const clientSideSeasonTotals = useMemo(() => {
+        if (!team || !availableWeeks.length || !league) return null;
+        
+        const weeklyScores = [];
+        let seasonTotal = 0;
+        
+        // Calculate score for each available week using the same logic as current week
+        for (const week of availableWeeks) {
+            const weekTeamWithStats = {
+                ...team,
+                players: (team.players || []).map(player => {
+                    const playerWithStats = getPlayerWithRealStats(player.player_id, week, seasonType);
+                    return playerWithStats || { ...player, stats: {} };
+                })
+            };
+            
+            const weekScoreData = calculateTeamScoreWithStats(weekTeamWithStats, league, getPlayerWithRealStats, week, seasonType);
+            const weekScore = weekScoreData.weeklyScore || 0;
+            
+            if (weekScore > 0) {
+                weeklyScores.push({ week, score: weekScore });
+                seasonTotal += weekScore;
+            }
+        }
+        
+        return {
+            season_total: Math.round(seasonTotal * 100) / 100,
+            weeks_played: weeklyScores.length,
+            weekly_breakdown: weeklyScores
+        };
+    }, [team, availableWeeks, league, seasonType, getPlayerWithRealStats]);
+    
+    // Log comparison for debugging
+    useEffect(() => {
+        if (teamSeasonStats && clientSideSeasonTotals) {
+            console.log('🔍 Season Totals Comparison:');
+            console.log('  Backend:', teamSeasonStats.season_total);
+            console.log('  Client-side:', clientSideSeasonTotals.season_total);
+            console.log('  Difference:', Math.abs((teamSeasonStats.season_total || 0) - (clientSideSeasonTotals.season_total || 0)).toFixed(2));
+        }
+    }, [teamSeasonStats, clientSideSeasonTotals]);
+    
+    // Fetch stats for all weeks when component loads
+    useEffect(() => {
+        if (team && availableWeeks.length && league?.season_type) {
+            Promise.all(
+                availableWeeks.map(week => fetchRealStats(week, nflSeasonYear, seasonType))
+            ).catch(error => {
+                console.error('❌ Error fetching stats for all weeks:', error);
+            });
+        }
+    }, [team, availableWeeks, league?.season_type, nflSeasonYear, seasonType, fetchRealStats]);
 
     const fetchAvailableWeeks = async () => {
         try {

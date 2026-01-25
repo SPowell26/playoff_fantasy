@@ -365,6 +365,13 @@ export async function getSeasonTotals(db, leagueId, year, seasonType) {
           
           if (rosterResult.rows.length === 0) continue;
           
+          // Debug: Log roster players found
+          const playersWithStatsCount = rosterResult.rows.filter(row => row.id !== null).length;
+          console.log(`    📋 Week ${week} - ${team.name}: Found ${rosterResult.rows.length} roster players, ${playersWithStatsCount} have stats`);
+          if (team.id === teamsResult.rows[0].id) {
+            console.log(`    📋 Players on roster:`, rosterResult.rows.map(r => `${r.player_name} (${r.position}) - stats: ${r.id ? 'YES' : 'NO'}`).join(', '));
+          }
+          
           // Prepare players data for Best Ball calculation
           const validPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
           
@@ -382,38 +389,72 @@ export async function getSeasonTotals(db, leagueId, year, seasonType) {
                 position = 'DEF';
               }
               
-              // Map stats correctly - interceptions are different for offensive vs defensive
+              // Map stats to match frontend format (same as /scoring-ready endpoint)
+              // This ensures consistency between frontend and backend calculations
               const stats = {
-                passing_yards: row.passing_yards || 0,
-                passing_touchdowns: row.passing_touchdowns || 0,
-                rushing_yards: row.rushing_yards || 0,
-                rushing_touchdowns: row.rushing_touchdowns || 0,
-                receiving_yards: row.receiving_yards || 0,
-                receiving_touchdowns: row.receiving_touchdowns || 0,
-                fumbles_lost: row.fumbles_lost || 0,
-                two_point_conversions_passing: row.two_point_conversions_passing || 0,
-                two_point_conversions_receiving: row.two_point_conversions_receiving || 0,
-                punt_return_touchdowns: row.punt_return_touchdowns || 0,
-                kickoff_return_touchdowns: row.kickoff_return_touchdowns || 0,
+                // Use camelCase to match frontend expectations
+                passingYards: row.passing_yards || 0,
+                passingTD: row.passing_touchdowns || 0,
+                rushingYards: row.rushing_yards || 0,
+                rushingTD: row.rushing_touchdowns || 0,
+                receivingYards: row.receiving_yards || 0,
+                receivingTD: row.receiving_touchdowns || 0,
+                receptions: row.receptions || 0,
+                fumbles: row.fumbles_lost || 0,
+                twoPointConversionsPassing: row.two_point_conversions_passing || 0,
+                twoPointConversionsReceiving: row.two_point_conversions_receiving || 0,
+                puntReturnTD: row.punt_return_touchdowns || 0,
+                kickoffReturnTD: row.kickoff_return_touchdowns || 0,
                 sacks: row.sacks || 0,
-                fumble_recoveries: row.fumble_recoveries || 0,
+                fumbleRecoveries: row.fumble_recoveries || 0,
                 safeties: row.safeties || 0,
-                blocked_kicks: row.blocked_kicks || 0,
-                defensive_touchdowns: row.defensive_touchdowns || 0,
-                points_allowed: row.points_allowed || 0,
-                team_win: row.team_win || false,
-                field_goals_0_39: row.field_goals_0_39 || 0,
-                field_goals_40_49: row.field_goals_40_49 || 0,
-                field_goals_50_plus: row.field_goals_50_plus || 0,
-                extra_points: row.extra_points || 0
+                blockedKicks: row.blocked_kicks || 0,
+                defensiveTDs: row.defensive_touchdowns || 0,
+                pointsAllowed: row.points_allowed || 0,
+                teamWin: row.team_win === true || row.team_win === 1 || row.team_win === 'true',
+                team_win: row.team_win === true || row.team_win === 1 || row.team_win === 'true',
+                fieldGoals0_39: row.field_goals_0_39 || 0,
+                fieldGoals40_49: row.field_goals_40_49 || 0,
+                fieldGoals50_plus: row.field_goals_50_plus || 0,
+                extraPointsMade: row.extra_points || 0,
+                fieldGoalsMissed: row.field_goals_missed || 0,
+                extraPointsMissed: row.extra_points_missed || 0
               };
               
               // Interceptions: offensive players get interceptions thrown (negative), D/ST gets interceptions made (positive)
+              // Match the same logic as /scoring-ready endpoint
               if (position === 'DEF') {
                 stats.interceptions = row.interceptions_defense || 0; // D/ST: interceptions made
               } else {
                 stats.interceptions = row.interceptions || 0; // Offensive: interceptions thrown
               }
+              
+              // Also include snake_case versions for backward compatibility with best-ball-scoring.js
+              stats.passing_yards = row.passing_yards || 0;
+              stats.passing_touchdowns = row.passing_touchdowns || 0;
+              stats.rushing_yards = row.rushing_yards || 0;
+              stats.rushing_touchdowns = row.rushing_touchdowns || 0;
+              stats.receiving_yards = row.receiving_yards || 0;
+              stats.receiving_touchdowns = row.receiving_touchdowns || 0;
+              stats.fumbles_lost = row.fumbles_lost || 0;
+              stats.two_point_conversions_passing = row.two_point_conversions_passing || 0;
+              stats.two_point_conversions_receiving = row.two_point_conversions_receiving || 0;
+              stats.punt_return_touchdowns = row.punt_return_touchdowns || 0;
+              stats.kickoff_return_touchdowns = row.kickoff_return_touchdowns || 0;
+              stats.sacks = row.sacks || 0;
+              stats.fumble_recoveries = row.fumble_recoveries || 0;
+              stats.safeties = row.safeties || 0;
+              stats.blocked_kicks = row.blocked_kicks || 0;
+              stats.defensive_touchdowns = row.defensive_touchdowns || 0;
+              stats.points_allowed = row.points_allowed || 0;
+              stats.team_win = row.team_win === true || row.team_win === 1 || row.team_win === 'true';
+              stats.field_goals_0_39 = row.field_goals_0_39 || 0;
+              stats.field_goals_40_49 = row.field_goals_40_49 || 0;
+              stats.field_goals_50_plus = row.field_goals_50_plus || 0;
+              stats.extra_points = row.extra_points || 0;
+              stats.field_goals_missed = row.field_goals_missed || 0;
+              stats.extra_points_missed = row.extra_points_missed || 0;
+              stats.receptions = row.receptions || 0;
               
               return {
                 id: row.player_id,
@@ -425,7 +466,16 @@ export async function getSeasonTotals(db, leagueId, year, seasonType) {
               };
             });
           
-          if (teamPlayers.length === 0) continue;
+          if (teamPlayers.length === 0) {
+            console.log(`    ⚠️ Week ${week} - ${team.name}: No valid players after filtering`);
+            continue;
+          }
+          
+          // Debug: Log which players are being used for calculation
+          if (team.id === teamsResult.rows[0].id) {
+            console.log(`    🎯 Week ${week} - ${team.name}: Using ${teamPlayers.length} players for calculation:`, 
+              teamPlayers.map(p => `${p.name} (${p.position})`).join(', '));
+          }
           
           // Calculate Best Ball weekly score using latest scoring logic
           const bestBallResult = calculateBestBallWeeklyScore(teamPlayers);
@@ -471,6 +521,15 @@ export async function getSeasonTotals(db, leagueId, year, seasonType) {
         weeksCount: weeksPlayed,
         weeksIncluded: weeklyScoresWithWeeks.map(w => w.week).join(', ')
       });
+      
+      // IMPORTANT: Log detailed breakdown for first team to help debug discrepancies
+      if (teamData.team_id === teamsResult.rows[0].id) {
+        console.log(`\n🔍 DETAILED BREAKDOWN for ${teamData.team_name}:`);
+        weeklyScoresWithWeeks.forEach(({ week, score }) => {
+          console.log(`  Week ${week}: ${score.toFixed(2)} points`);
+        });
+        console.log(`  Total: ${seasonTotal.toFixed(2)} points across ${weeksPlayed} weeks\n`);
+      }
       
       return {
         team_id: teamData.team_id,
