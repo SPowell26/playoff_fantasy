@@ -180,6 +180,120 @@ const WeekStatus = () => {
               
               <button
                 onClick={async () => {
+                  console.log('🔄 Refresh Players button clicked');
+                  console.error('🔴 Button clicked - ERROR level log');
+                  
+                  if (isUpdating) {
+                    console.log('⚠️ Already updating, ignoring click');
+                    return;
+                  }
+                  
+                  setIsUpdating(true);
+                  setUpdateMessage({ type: 'info', text: 'Starting player refresh...' });
+                  
+                  try {
+                    setIsUpdating(true);
+                    setUpdateMessage({ type: 'info', text: 'Starting player refresh...' });
+                    console.log('✅ isUpdating set to true');
+                    
+                    // First test if the endpoint is reachable
+                    const testUrl = `${API_URL}/api/players/test`;
+                    console.log(`🧪 Testing endpoint: ${testUrl}`);
+                    try {
+                      const testResponse = await fetch(testUrl, { credentials: 'include' });
+                      const testData = await testResponse.json();
+                      console.log('✅ Test endpoint works:', testData);
+                    } catch (testErr) {
+                      console.error('❌ Test endpoint failed:', testErr);
+                      throw new Error(`Cannot reach backend at ${API_URL}. Backend may not be running.`);
+                    }
+                    
+                    const url = `${API_URL}/api/players/import`;
+                    console.log(`🔄 Refreshing players from ${url}`);
+                    console.log('🔍 Making fetch request at:', new Date().toISOString());
+                    
+                    // Add timeout to fetch
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => {
+                      console.error('⏱️ Request timeout after 120 seconds');
+                      controller.abort();
+                    }, 120000); // 120 second timeout
+                    
+                    console.log('📡 About to call fetch...');
+                    const fetchStartTime = Date.now();
+                    
+                    const response = await fetch(url, {
+                      method: 'POST',
+                      credentials: 'include',
+                      headers: {
+                        'Content-Type': 'application/json'
+                      },
+                      signal: controller.signal
+                    });
+                    console.log('📡 Fetch call completed, waiting for response...');
+                    
+                    clearTimeout(timeoutId);
+                    const fetchDuration = Date.now() - fetchStartTime;
+                    console.log(`📡 Response received after ${fetchDuration}ms. Status:`, response.status);
+                    console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+                    
+                    if (!response.ok) {
+                      const errorText = await response.text();
+                      console.error('❌ Response error:', errorText);
+                      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('✅ Players refreshed:', data);
+                    setUpdateMessage({ 
+                      type: 'success', 
+                      text: `Players refreshed! ${data.inserted_count || 0} inserted, ${data.updated_count || 0} updated.` 
+                    });
+                    
+                    // Refresh the page data after player refresh
+                    setTimeout(() => {
+                      refreshWeekStatus();
+                      window.location.reload();
+                    }, 2000);
+                  } catch (error) {
+                    console.error('❌ Failed to refresh players:', error);
+                    console.error('❌ Error details:', {
+                      name: error.name,
+                      message: error.message,
+                      stack: error.stack
+                    });
+                    
+                    let errorMessage = error.message || 'Unknown error';
+                    if (error.name === 'AbortError') {
+                      errorMessage = 'Request timed out after 2 minutes. The backend may be processing - check server logs.';
+                    } else if (error.message.includes('CONNECTION_REFUSED') || error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.message.includes('Network request failed')) {
+                      errorMessage = `Cannot connect to backend at ${API_URL}/api/players/import. Check: 1) Backend is running, 2) Correct API_URL, 3) CORS settings.`;
+                    } else if (error.message.includes('401') || error.message.includes('AUTH_REQUIRED')) {
+                      errorMessage = 'Authentication required. Please log in as a master account.';
+                    } else if (error.message.includes('403') || error.message.includes('MASTER_REQUIRED')) {
+                      errorMessage = 'Master account required. Only master accounts can refresh players.';
+                    }
+                    
+                    setUpdateMessage({ type: 'error', text: `Failed to refresh players: ${errorMessage}` });
+                    setTimeout(() => setUpdateMessage(null), 15000);
+                  } finally {
+                    setIsUpdating(false);
+                    console.log('✅ Refresh handler complete');
+                  }
+                }}
+                disabled={isUpdating}
+                className={`px-3 py-2 text-xs text-white rounded-lg transition-colors border ${
+                  isUpdating 
+                    ? 'bg-blue-800 cursor-not-allowed opacity-50 border-blue-600' 
+                    : 'bg-blue-700 hover:bg-blue-600 border-blue-600 cursor-pointer'
+                }`}
+                title="Refresh player list from ESPN (updates teams, positions, etc.)"
+              >
+                {isUpdating ? '⏳ Loading...' : '👥 Refresh Players'}
+              </button>
+              
+              <button
+                onClick={async () => {
                   console.log('🔄 Update Stats button clicked');
                   if (isUpdating) {
                     console.log('⚠️ Already updating, ignoring click');
@@ -251,9 +365,6 @@ const WeekStatus = () => {
               </button>
             </>
           )}
-          
-          {/* Debug: Show if master account */}
-          {console.log('🔍 WeekStatus - isMaster:', isMaster, 'isUpdating:', isUpdating) || null}
         </div>
       </div>
       

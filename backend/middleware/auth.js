@@ -111,6 +111,7 @@ export function requireCommissionerOrSystem(leagueIdParam) {
     try {
       // Debug logging for system endpoints
       if (isSystemEndpoint) {
+        console.log('🔍 System endpoint auth check - PATH:', req.path, 'METHOD:', req.method);
         console.log('🔍 System endpoint auth check:', {
           hasSession: !!req.session,
           hasCommissioner: !!(req.session && req.session.commissioner),

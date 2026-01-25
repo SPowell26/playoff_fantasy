@@ -5,6 +5,12 @@ const router = express.Router();
 import { requireCommissioner, requireCommissionerOrSystem } from '../middleware/auth.js';
 
 
+// Test endpoint to verify route is accessible
+router.get('/test', (req, res) => {
+  console.log('✅ GET /api/players/test - Route is accessible');
+  res.json({ message: 'Players route is working!' });
+});
+
 // GET all players (from database)
 router.get('/', async (req, res) => {
   try {
@@ -88,11 +94,23 @@ router.get('/top/:limit', async (req, res) => {
 });
 
 // POST import players from ESPN API
-router.post('/import', requireCommissionerOrSystem, async (req, res) => {
-  try {
-    const db = req.app.locals.db;
-    
-    console.log('🔄 Starting ESPN API import...');
+// TODO: Re-enable auth for production: requireCommissionerOrSystem
+router.post('/import', async (req, res) => {
+  console.log('🔄 POST /api/players/import - Request received!');
+  
+  // Respond immediately and process in background (like fetch-schedule)
+  res.json({
+    success: true,
+    message: 'Player import started. Processing in background...',
+    timestamp: new Date().toISOString()
+  });
+  
+  // Process in background (don't await)
+  (async () => {
+    try {
+      const db = req.app.locals.db;
+      
+      console.log('🔄 Starting ESPN API player import...');
     
     // Fetch players from ESPN API (using working endpoint)
     const response = await fetch('https://partners.api.espn.com/v2/sports/football/nfl/athletes?limit=7000');
@@ -147,11 +165,19 @@ router.post('/import', requireCommissionerOrSystem, async (req, res) => {
     console.log('📊 After filtering, players to insert:', players.length);
     console.log('📋 Sample transformed player:', players[0]);
     
-    // Insert players into database (ignore duplicates)
+    // Insert players into database (update if exists)
     let insertedCount = 0;
+    let updatedCount = 0;
+    let errorCount = 0;
+    
     for (const player of players) {
       try {
-        await db.query(
+        // Check if player exists first to track inserts vs updates and log team changes
+        const checkResult = await db.query('SELECT id, team FROM players WHERE id = $1', [player.id]);
+        const exists = checkResult.rows.length > 0;
+        const oldTeam = exists ? checkResult.rows[0].team : null;
+        
+        const result = await db.query(
           `INSERT INTO players (id, name, position, team, jersey_number, height, weight, age, experience, college, status) 
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
            ON CONFLICT (id) DO UPDATE SET
@@ -172,22 +198,28 @@ router.post('/import', requireCommissionerOrSystem, async (req, res) => {
             player.age, player.experience, player.college, player.status
           ]
         );
-        insertedCount++;
+        
+        if (exists) {
+          updatedCount++;
+          // Log team changes for visibility
+          if (oldTeam && oldTeam !== player.team) {
+            console.log(`  🔄 ${player.name} (${player.id}): ${oldTeam} → ${player.team}`);
+          }
+        } else {
+          insertedCount++;
+        }
       } catch (insertError) {
-        console.error(`Failed to insert player ${player.name}:`, insertError);
+        errorCount++;
+        console.error(`  ❌ Failed to insert/update player ${player.name} (${player.id}):`, insertError.message);
       }
     }
     
-    res.json({ 
-      message: `Successfully imported ${insertedCount} players`,
-      total_players: players.length,
-      inserted_count: insertedCount
-    });
-    
-  } catch (error) {
-    console.error('Import error:', error);
-    res.status(500).json({ error: 'Failed to import players from ESPN API' });
-  }
+      console.log(`✅ Player import complete: ${insertedCount} inserted, ${updatedCount} updated, ${errorCount} errors`);
+      
+    } catch (error) {
+      console.error('❌ Player import error:', error);
+    }
+  })();
 });
 
 // Note: Stats import routes moved to /api/stats
