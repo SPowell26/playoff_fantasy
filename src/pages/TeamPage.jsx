@@ -95,15 +95,53 @@ const TeamPage = () => {
         fetchTeamSeasonStats();
     }, [fetchTeamSeasonStats]);
     
-    // Also calculate client-side for comparison/verification
+    // Fetch stats for all weeks when component loads (needed for client-side calculation)
+    const [statsFetched, setStatsFetched] = useState(false);
+    
+    useEffect(() => {
+        if (team && availableWeeks.length && league?.season_type) {
+        // Extract week numbers - availableWeeks is array of {week, year} objects
+        const weekNumbers = availableWeeks
+            .map(w => typeof w === 'number' ? w : (w.week || w))
+            .filter(w => typeof w === 'number');
+        
+        if (weekNumbers.length === 0) {
+            console.warn('⚠️ No valid week numbers found in availableWeeks:', availableWeeks);
+            setStatsFetched(true);
+            return;
+        }
+        
+        Promise.all(
+            weekNumbers.map(week => fetchRealStats(week, nflSeasonYear, seasonType))
+        ).then(() => {
+            setStatsFetched(true);
+        }).catch(error => {
+            console.error('❌ Error fetching stats for all weeks:', error);
+            setStatsFetched(true); // Set to true anyway so calculation can proceed
+        });
+        }
+    }, [team, availableWeeks, league?.season_type, nflSeasonYear, seasonType, fetchRealStats]);
+    
+    // Also calculate client-side for comparison/verification (after stats are fetched)
     const clientSideSeasonTotals = useMemo(() => {
-        if (!team || !availableWeeks.length || !league) return null;
+        if (!team || !availableWeeks.length || !league || !statsFetched) return null;
+        
+        // Extract week numbers - availableWeeks is array of {week, year} objects
+        const weekNumbers = availableWeeks
+            .map(w => typeof w === 'number' ? w : (w.week || w))
+            .filter(w => typeof w === 'number');
+        
+        if (weekNumbers.length === 0) {
+            console.warn('⚠️ No valid week numbers for client-side calculation');
+            return null;
+        }
         
         const weeklyScores = [];
         let seasonTotal = 0;
         
         // Calculate score for each available week using the same logic as current week
-        for (const week of availableWeeks) {
+        for (const week of weekNumbers) {
+            
             const weekTeamWithStats = {
                 ...team,
                 players: (team.players || []).map(player => {
@@ -126,7 +164,7 @@ const TeamPage = () => {
             weeks_played: weeklyScores.length,
             weekly_breakdown: weeklyScores
         };
-    }, [team, availableWeeks, league, seasonType, getPlayerWithRealStats]);
+    }, [team, availableWeeks, league, seasonType, getPlayerWithRealStats, statsFetched]);
     
     // Log comparison for debugging
     useEffect(() => {
@@ -135,19 +173,11 @@ const TeamPage = () => {
             console.log('  Backend:', teamSeasonStats.season_total);
             console.log('  Client-side:', clientSideSeasonTotals.season_total);
             console.log('  Difference:', Math.abs((teamSeasonStats.season_total || 0) - (clientSideSeasonTotals.season_total || 0)).toFixed(2));
+            if (clientSideSeasonTotals.weekly_breakdown) {
+                console.log('  Client-side breakdown:', clientSideSeasonTotals.weekly_breakdown);
+            }
         }
     }, [teamSeasonStats, clientSideSeasonTotals]);
-    
-    // Fetch stats for all weeks when component loads
-    useEffect(() => {
-        if (team && availableWeeks.length && league?.season_type) {
-            Promise.all(
-                availableWeeks.map(week => fetchRealStats(week, nflSeasonYear, seasonType))
-            ).catch(error => {
-                console.error('❌ Error fetching stats for all weeks:', error);
-            });
-        }
-    }, [team, availableWeeks, league?.season_type, nflSeasonYear, seasonType, fetchRealStats]);
 
     const fetchAvailableWeeks = async () => {
         try {
