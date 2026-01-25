@@ -364,6 +364,82 @@ const WeekStatus = () => {
               >
                 {isUpdating ? '⏳ Loading...' : '🔄 Update All Weeks Stats'}
               </button>
+              
+              <button
+                onClick={async () => {
+                  console.log('🔄 Recalculate Scores button clicked');
+                  if (isUpdating) {
+                    console.log('⚠️ Already updating, ignoring click');
+                    return;
+                  }
+                  
+                  setIsUpdating(true);
+                  setUpdateMessage(null);
+                  
+                  try {
+                    console.log(`🔄 Recalculating scores from ${API_URL}/api/stats/recalculate-scores`);
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
+                    
+                    const response = await fetch(`${API_URL}/api/stats/recalculate-scores`, {
+                      method: 'POST',
+                      credentials: 'include',
+                      headers: {
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({
+                        year: nflSeasonYear,
+                        seasonType: seasonType
+                      }),
+                      signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    console.log('📡 Response status:', response.status);
+                    
+                    if (!response.ok) {
+                      const errorText = await response.text();
+                      console.error('❌ Response error:', errorText);
+                      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('✅ Scores recalculated:', data);
+                    setUpdateMessage({ 
+                      type: 'success', 
+                      text: `Recalculated scores for ${data.leaguesProcessed} league(s) across ${data.weeksProcessed} weeks!` 
+                    });
+                    
+                    setTimeout(() => {
+                      refreshWeekStatus();
+                      window.location.reload();
+                    }, 2000);
+                  } catch (error) {
+                    console.error('❌ Failed to recalculate scores:', error);
+                    let errorMessage = error.message;
+                    if (error.name === 'AbortError') {
+                      errorMessage = 'Request timed out. The backend may be processing the request - check server logs.';
+                    } else if (error.message.includes('CONNECTION_REFUSED') || error.message.includes('Failed to fetch')) {
+                      errorMessage = `Cannot connect to backend at ${API_URL}. Make sure the backend server is running.`;
+                    }
+                    setUpdateMessage({ type: 'error', text: `Failed to recalculate scores: ${errorMessage}` });
+                    setTimeout(() => setUpdateMessage(null), 8000);
+                  } finally {
+                    setIsUpdating(false);
+                    console.log('✅ Recalculation complete');
+                  }
+                }}
+                disabled={isUpdating}
+                className={`px-3 py-2 text-xs text-white rounded-lg transition-colors border ${
+                  isUpdating 
+                    ? 'bg-purple-800 cursor-not-allowed opacity-50 border-purple-600' 
+                    : 'bg-purple-700 hover:bg-purple-600 border-purple-600 cursor-pointer'
+                }`}
+                title="Force recalculation of best ball scores using latest scoring logic (includes 2-pt conversions, defensive TDs, return TDs)"
+              >
+                {isUpdating ? '⏳ Loading...' : '🔄 Recalculate Scores'}
+              </button>
             </>
           )}
         </div>

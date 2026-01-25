@@ -283,6 +283,7 @@ export async function getTeamStandings(db, leagueId, week, year, seasonType) {
 
 /**
  * Get season totals for all teams in a league
+ * Calculates on-the-fly from player stats (not cached scores) to always use latest scoring logic
  * @param {Object} db - Database connection
  * @param {number} leagueId - League ID
  * @param {number} year - Year
@@ -291,26 +292,176 @@ export async function getTeamStandings(db, leagueId, week, year, seasonType) {
  */
 export async function getSeasonTotals(db, leagueId, year, seasonType) {
   try {
-    const result = await db.query(`
-      SELECT 
-        t.id as team_id,
-        t.name as team_name,
-        t.owner,
-        COUNT(tws.week) as weeks_played,
-        SUM(tws.weekly_score) as season_total,
-        AVG(tws.weekly_score) as average_weekly_score,
-        MAX(tws.weekly_score) as best_weekly_score,
-        MIN(tws.weekly_score) as worst_weekly_score
-      FROM teams t
-      LEFT JOIN team_weekly_scores tws ON t.id = tws.team_id 
-        AND tws.year = $1 
-        AND tws.season_type = $2
-      WHERE t.league_id = $3
-      GROUP BY t.id, t.name, t.owner
-      ORDER BY season_total DESC NULLS LAST, t.name ASC
-    `, [year, seasonType, leagueId]);
+    // Get all teams in the league
+    const teamsResult = await db.query(
+      `SELECT id, name, owner FROM teams WHERE league_id = $1`,
+      [leagueId]
+    );
     
-    return result.rows;
+    if (teamsResult.rows.length === 0) {
+      return [];
+    }
+    
+    // Get all weeks that have stats for this season
+    const weeksResult = await db.query(`
+      SELECT DISTINCT week 
+      FROM player_stats 
+      WHERE year = $1 AND season_type = $2
+      ORDER BY week ASC
+    `, [year, seasonType]);
+    
+    const weeks = weeksResult.rows.map(row => row.week);
+    
+    if (weeks.length === 0) {
+      // No weeks with stats, return teams with zero scores
+      return teamsResult.rows.map(team => ({
+        team_id: team.id,
+        team_name: team.name,
+        owner: team.owner,
+        weeks_played: 0,
+        season_total: 0,
+        average_weekly_score: null,
+        best_weekly_score: null,
+        worst_weekly_score: null
+      }));
+    }
+    
+    // Calculate weekly scores for each team and week on-the-fly
+    const teamScores = new Map(); // team_id -> { weeklyScores: [], totals }
+    
+    for (const team of teamsResult.rows) {
+      teamScores.set(team.id, {
+        team_id: team.id,
+        team_name: team.name,
+        owner: team.owner,
+        weeklyScores: []
+      });
+    }
+    
+    // Calculate scores for each week
+    for (const week of weeks) {
+      for (const team of teamsResult.rows) {
+        try {
+          // Get team roster with player stats for this week
+          const rosterResult = await db.query(`
+            SELECT 
+              tr.roster_position,
+              p.id as player_id,
+              p.name as player_name,
+              p.position,
+              p.team as nfl_team,
+              ps.*
+            FROM team_rosters tr
+            JOIN players p ON tr.player_id = p.id
+            LEFT JOIN player_stats ps ON p.id = ps.player_id 
+              AND ps.week = $1 
+              AND ps.year = $2
+              AND (ps.season_type = $3 OR (ps.season_type IS NULL AND $3 = 'regular'))
+            WHERE tr.team_id = $4
+              AND tr.league_id = $5
+            ORDER BY tr.roster_position, p.position, p.name
+          `, [week, year, seasonType, team.id, leagueId]);
+          
+          if (rosterResult.rows.length === 0) continue;
+          
+          // Prepare players data for Best Ball calculation
+          const validPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+          
+          const teamPlayers = rosterResult.rows
+            .filter(row => {
+              let position = row.position;
+              if (position === 'D/ST' || position === 'DST' || position === 'DEF') {
+                position = 'DEF';
+              }
+              return validPositions.includes(position);
+            })
+            .map(row => {
+              let position = row.position;
+              if (position === 'D/ST' || position === 'DST' || position === 'DEF') {
+                position = 'DEF';
+              }
+              
+              // Map stats correctly - interceptions are different for offensive vs defensive
+              const stats = {
+                passing_yards: row.passing_yards || 0,
+                passing_touchdowns: row.passing_touchdowns || 0,
+                rushing_yards: row.rushing_yards || 0,
+                rushing_touchdowns: row.rushing_touchdowns || 0,
+                receiving_yards: row.receiving_yards || 0,
+                receiving_touchdowns: row.receiving_touchdowns || 0,
+                fumbles_lost: row.fumbles_lost || 0,
+                two_point_conversions_passing: row.two_point_conversions_passing || 0,
+                two_point_conversions_receiving: row.two_point_conversions_receiving || 0,
+                punt_return_touchdowns: row.punt_return_touchdowns || 0,
+                kickoff_return_touchdowns: row.kickoff_return_touchdowns || 0,
+                sacks: row.sacks || 0,
+                fumble_recoveries: row.fumble_recoveries || 0,
+                safeties: row.safeties || 0,
+                blocked_kicks: row.blocked_kicks || 0,
+                defensive_touchdowns: row.defensive_touchdowns || 0,
+                points_allowed: row.points_allowed || 0,
+                team_win: row.team_win || false,
+                field_goals_0_39: row.field_goals_0_39 || 0,
+                field_goals_40_49: row.field_goals_40_49 || 0,
+                field_goals_50_plus: row.field_goals_50_plus || 0,
+                extra_points: row.extra_points || 0
+              };
+              
+              // Interceptions: offensive players get interceptions thrown (negative), D/ST gets interceptions made (positive)
+              if (position === 'DEF') {
+                stats.interceptions = row.interceptions_defense || 0; // D/ST: interceptions made
+              } else {
+                stats.interceptions = row.interceptions || 0; // Offensive: interceptions thrown
+              }
+              
+              return {
+                id: row.player_id,
+                name: row.player_name,
+                position: position,
+                nflTeam: row.nfl_team,
+                rosterPosition: row.roster_position,
+                stats
+              };
+            });
+          
+          if (teamPlayers.length === 0) continue;
+          
+          // Calculate Best Ball weekly score using latest scoring logic
+          const bestBallResult = calculateBestBallWeeklyScore(teamPlayers);
+          const teamData = teamScores.get(team.id);
+          teamData.weeklyScores.push(bestBallResult.weeklyScore);
+          
+        } catch (error) {
+          console.error(`Error calculating score for team ${team.id} week ${week}:`, error);
+        }
+      }
+    }
+    
+    // Convert to result format
+    const results = Array.from(teamScores.values()).map(teamData => {
+      const weeklyScores = teamData.weeklyScores.filter(score => score > 0); // Only count weeks with scores
+      const weeksPlayed = weeklyScores.length;
+      const seasonTotal = weeklyScores.reduce((sum, score) => sum + score, 0);
+      const averageScore = weeksPlayed > 0 ? seasonTotal / weeksPlayed : null;
+      const bestWeek = weeklyScores.length > 0 ? Math.max(...weeklyScores) : null;
+      const worstWeek = weeklyScores.length > 0 ? Math.min(...weeklyScores) : null;
+      
+      return {
+        team_id: teamData.team_id,
+        team_name: teamData.team_name,
+        owner: teamData.owner,
+        weeks_played: weeksPlayed,
+        season_total: Math.round(seasonTotal * 100) / 100, // Round to 2 decimals
+        average_weekly_score: averageScore ? Math.round(averageScore * 100) / 100 : null,
+        best_weekly_score: bestWeek ? Math.round(bestWeek * 100) / 100 : null,
+        worst_weekly_score: worstWeek ? Math.round(worstWeek * 100) / 100 : null
+      };
+    });
+    
+    // Sort by season total descending
+    results.sort((a, b) => (b.season_total || 0) - (a.season_total || 0));
+    
+    return results;
   } catch (error) {
     console.error(`❌ Error getting season totals:`, error);
     throw error;

@@ -1250,6 +1250,89 @@ router.get('/season-totals/:leagueId', async (req, res) => {
   }
 });
 
+// POST endpoint to recalculate best ball scores for all weeks
+// This forces recalculation using the latest scoring logic (including new stats)
+router.post('/recalculate-scores', async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    const { leagueId, year = 2025, seasonType = 'postseason' } = req.body;
+    
+    console.log('🔄 Starting best ball score recalculation...');
+    
+    // Get all leagues (or specific league if provided)
+    let leaguesResult;
+    if (leagueId) {
+      leaguesResult = await db.query('SELECT id, name FROM leagues WHERE id = $1', [leagueId]);
+    } else {
+      leaguesResult = await db.query('SELECT id, name FROM leagues');
+    }
+    
+    if (leaguesResult.rows.length === 0) {
+      return res.status(404).json({ error: 'No leagues found' });
+    }
+    
+    const leagues = leaguesResult.rows;
+    console.log(`📊 Recalculating scores for ${leagues.length} league(s)`);
+    
+    // Get all weeks that have stats for this season
+    const weeksResult = await db.query(`
+      SELECT DISTINCT week 
+      FROM player_stats 
+      WHERE year = $1 AND season_type = $2
+      ORDER BY week ASC
+    `, [year, seasonType]);
+    
+    const weeks = weeksResult.rows.map(row => row.week);
+    console.log(`📅 Found ${weeks.length} weeks to recalculate: ${weeks.join(', ')}`);
+    
+    const allResults = [];
+    for (const league of leagues) {
+      console.log(`\n🏈 Recalculating scores for League: ${league.name} (ID: ${league.id})`);
+      const leagueResults = [];
+      
+      for (const week of weeks) {
+        try {
+          console.log(`  🔄 Recalculating Week ${week}...`);
+          const result = await calculateLeagueWeeklyScores(db, league.id, week, year, seasonType);
+          leagueResults.push({ week, ...result });
+          console.log(`  ✅ Week ${week} recalculated: ${result.scoresCalculated} scores updated`);
+        } catch (weekError) {
+          console.error(`  ❌ Error recalculating Week ${week}:`, weekError.message);
+          leagueResults.push({ week, error: weekError.message });
+        }
+      }
+      
+      allResults.push({
+        leagueId: league.id,
+        leagueName: league.name,
+        weeks: leagueResults
+      });
+    }
+    
+    const totalWeeksProcessed = weeks.length * leagues.length;
+    console.log(`✅ Recalculation complete: ${totalWeeksProcessed} week-league combinations processed`);
+    
+    res.json({
+      success: true,
+      message: `Recalculated best ball scores for ${leagues.length} league(s) across ${weeks.length} weeks`,
+      year,
+      seasonType,
+      leaguesProcessed: leagues.length,
+      weeksProcessed: weeks.length,
+      totalCombinations: totalWeeksProcessed,
+      results: allResults,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error recalculating scores:', error);
+    res.status(500).json({ 
+      error: 'Failed to recalculate scores',
+      message: error.message 
+    });
+  }
+});
+
 // GET stats formatted for frontend scoring engine
 router.get('/scoring-ready/:week', async (req, res) => {
   try {
