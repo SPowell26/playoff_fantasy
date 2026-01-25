@@ -40,6 +40,13 @@ export function calculatePlayerFantasyPoints(playerStats, position, scoringRules
       
       // Receptions (QBs don't typically get receptions, but included for completeness)
       points += (playerStats.receptions || 0) * (rules.offensive.receptionPoints || 1); // PPR from scoring rules
+      
+      // 2-point conversions (passing)
+      points += (playerStats.two_point_conversions_passing || 0) * 2;
+      
+      // Return touchdowns (for individual players)
+      points += (playerStats.punt_return_touchdowns || 0) * (rules.defensive?.specialTeams?.puntReturnTDPoints || 6);
+      points += (playerStats.kickoff_return_touchdowns || 0) * (rules.defensive?.specialTeams?.kickoffReturnTDPoints || 6);
       break;
 
     case 'RB':
@@ -66,6 +73,13 @@ export function calculatePlayerFantasyPoints(playerStats, position, scoringRules
       
       // Fumbles
       points += (playerStats.fumbles_lost || 0) * rules.offensive.fumbles.lostPoints;
+      
+      // 2-point conversions (receiving)
+      points += (playerStats.two_point_conversions_receiving || 0) * 2;
+      
+      // Return touchdowns (for individual players)
+      points += (playerStats.punt_return_touchdowns || 0) * (rules.defensive?.specialTeams?.puntReturnTDPoints || 6);
+      points += (playerStats.kickoff_return_touchdowns || 0) * (rules.defensive?.specialTeams?.kickoffReturnTDPoints || 6);
       break;
 
     case 'K':
@@ -91,6 +105,9 @@ export function calculatePlayerFantasyPoints(playerStats, position, scoringRules
       points += (playerStats.blocked_kicks || 0) * rules.defensive.specialTeams.blockedKickPoints;
       points += (playerStats.punt_return_touchdowns || 0) * rules.defensive.specialTeams.puntReturnTDPoints;
       points += (playerStats.kickoff_return_touchdowns || 0) * rules.defensive.specialTeams.kickoffReturnTDPoints;
+      
+      // Defensive touchdowns (interception returns, fumble recoveries for TDs)
+      points += (playerStats.defensive_touchdowns || 0) * 6;
       
       // Points allowed
       const pointsAllowed = playerStats.points_allowed || 0;

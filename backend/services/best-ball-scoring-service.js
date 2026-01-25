@@ -113,15 +113,19 @@ export async function calculateLeagueWeeklyScores(db, leagueId, week, year, seas
             receiving_yards: row.receiving_yards || 0,
             receiving_touchdowns: row.receiving_touchdowns || 0,
             fumbles_lost: row.fumbles_lost || 0,
+            two_point_conversions_passing: row.two_point_conversions_passing || 0,
+            two_point_conversions_receiving: row.two_point_conversions_receiving || 0,
+            punt_return_touchdowns: row.punt_return_touchdowns || 0,
+            kickoff_return_touchdowns: row.kickoff_return_touchdowns || 0,
             
-            // Defensive stats
+            // Defensive stats (for D/ST)
             sacks: row.sacks || 0,
             interceptions: row.interceptions_defense || 0,
             fumble_recoveries: row.fumble_recoveries || 0,
             safeties: row.safeties || 0,
             blocked_kicks: row.blocked_kicks || 0,
-            punt_return_touchdowns: row.punt_return_touchdowns || 0,
-            kickoff_return_touchdowns: row.kickoff_return_touchdowns || 0,
+            defensive_touchdowns: row.defensive_touchdowns || 0,
+            // Return TDs for D/ST (same fields as offensive players, but scored differently)
             points_allowed: row.points_allowed || 0,
             team_win: row.team_win || false,
             
