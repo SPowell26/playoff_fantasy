@@ -306,9 +306,9 @@ const WeekStatus = () => {
                   try {
                     console.log(`🔄 Updating stats from ${API_URL}/api/stats/weekly-update`);
                     
-                    // Add timeout to fetch
+                    // Add timeout to fetch (increased for multi-week processing)
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 second timeout (stats update can take longer)
+                    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout (processing all weeks can take longer)
                     
                     const response = await fetch(`${API_URL}/api/stats/weekly-update`, {
                       method: 'POST',
@@ -330,7 +330,8 @@ const WeekStatus = () => {
                     
                     const data = await response.json();
                     console.log('✅ Stats updated:', data);
-                    setUpdateMessage({ type: 'success', text: data.message || 'Stats updated successfully!' });
+                    const successMessage = data.message || `Stats updated for Weeks 1-${data.current_week || '?'}!`;
+                    setUpdateMessage({ type: 'success', text: successMessage });
                     
                     // Refresh the page data after stats update
                     setTimeout(() => {
@@ -359,9 +360,9 @@ const WeekStatus = () => {
                     ? 'bg-green-800 cursor-not-allowed opacity-50 border-green-600' 
                     : 'bg-green-700 hover:bg-green-600 border-green-600 cursor-pointer'
                 }`}
-                title="Manually update weekly stats from ESPN"
+                title="Manually update stats for all weeks (1 to current week) from ESPN"
               >
-                {isUpdating ? '⏳ Loading...' : '🔄 Update Stats'}
+                {isUpdating ? '⏳ Loading...' : '🔄 Update All Weeks Stats'}
               </button>
             </>
           )}

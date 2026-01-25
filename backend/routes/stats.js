@@ -521,62 +521,97 @@ router.post('/import-playoff', requireCommissionerOrSystem, async (req, res) => 
   }
 });
 
-// POST import weekly stats (new endpoint for entire week)
-// No auth required - safe system operation (pulls from ESPN and updates stats)
-router.post('/weekly-update', async (req, res) => {
+// Helper function to process stats for a single week
+async function processWeekStats(db, week, year, seasonTypeId = null) {
+  console.log(`\n📊 Processing Week ${week}, Year ${year}`);
+  
+  // Build scoreboard URL - include season type if provided to avoid mixing regular season and playoffs
+  let scoreboardUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&year=${year}`;
+  if (seasonTypeId) {
+    scoreboardUrl += `&seasontype=${seasonTypeId}`;
+    console.log(`  📊 Using season type ID: ${seasonTypeId}`);
+  }
+  
+  const scoreboardResponse = await fetch(scoreboardUrl);
+  
+  if (!scoreboardResponse.ok) {
+    console.log(`❌ Failed to get scoreboard for Week ${week}: ${scoreboardResponse.status}`);
+    return {
+      success: false,
+      week,
+      error: `Failed to get scoreboard: ${scoreboardResponse.status}`
+    };
+  }
+  
+  const scoreboardData = await scoreboardResponse.json();
+  
+  // Check if there are actually any games for this week
+  if (!scoreboardData.events || !Array.isArray(scoreboardData.events) || scoreboardData.events.length === 0) {
+    console.log(`⚠️ No games found for Week ${week} - skipping`);
+    return {
+      success: true,
+      week,
+      games_processed: 0,
+      games_failed: 0,
+      skipped: true,
+      message: `No games found for Week ${week}`
+    };
+  }
+  
+  // Detect season type from the scoreboard data for THIS specific week
+  const espnSeasonTypeId = scoreboardData.season?.type;
+  let seasonType = 'Unknown';
+  let seasonTypeName = 'Unknown';
+  
+  if (espnSeasonTypeId !== undefined) {
+    switch (espnSeasonTypeId) {
+      case 1:
+        seasonType = 'preseason';
+        seasonTypeName = 'Preseason';
+        break;
+      case 2:
+        seasonType = 'regular';
+        seasonTypeName = 'Regular Season';
+        break;
+      case 3:
+        seasonType = 'postseason';
+        seasonTypeName = 'Playoffs';
+        break;
+      case 4:
+        seasonType = 'offseason';
+        seasonTypeName = 'Offseason';
+        break;
+      default:
+        seasonType = `unknown_${espnSeasonTypeId}`;
+        seasonTypeName = `Unknown Type ${espnSeasonTypeId}`;
+    }
+  }
+  
+  console.log(`📊 Week ${week} detected as: ${seasonTypeName} (ESPN ID: ${espnSeasonTypeId})`);
+  console.log(`🏈 Found ${scoreboardData.events.length} games for Week ${week}`);
+  
+  // Check if any games have actually been played (have scores/stats)
+  // Future games will exist in the events array but won't have completed status
+  const completedGames = scoreboardData.events.filter(game => {
+    const status = game.status?.type?.completed || game.competitions?.[0]?.status?.type?.completed;
+    return status === true || game.status?.type?.name === 'STATUS_FINAL';
+  });
+  
+  if (completedGames.length === 0) {
+    console.log(`⚠️ Week ${week} has ${scoreboardData.events.length} scheduled games but none have been completed yet - skipping`);
+    return {
+      success: true,
+      week,
+      games_processed: 0,
+      games_failed: 0,
+      skipped: true,
+      message: `Week ${week} has scheduled games but none completed yet`
+    };
+  }
+  
+  console.log(`✅ Week ${week} has ${completedGames.length} completed games out of ${scoreboardData.events.length} total`);
+  
   try {
-    const db = req.app.locals.db;
-    
-    console.log('🔄 Starting weekly stats update...');
-    
-    // First get the current week status from ESPN Scoreboard API
-    const scoreboardResponse = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard');
-    
-    if (!scoreboardResponse.ok) {
-      return res.status(500).json({ error: 'Failed to get current week status from ESPN' });
-    }
-    
-    const scoreboardData = await scoreboardResponse.json();
-    
-    if (!scoreboardData.events || !Array.isArray(scoreboardData.events)) {
-      return res.status(400).json({ error: 'No events found for current week' });
-    }
-    
-    const currentWeek = scoreboardData.week?.number || 'Unknown';
-    const currentYear = scoreboardData.season?.year || new Date().getFullYear();
-    
-    // Map ESPN's numeric season type to meaningful names
-    const espnSeasonTypeId = scoreboardData.season?.type;
-    let seasonType = 'Unknown';
-    let seasonTypeName = 'Unknown';
-    
-    if (espnSeasonTypeId !== undefined) {
-      switch (espnSeasonTypeId) {
-        case 1:
-          seasonType = 'preseason';
-          seasonTypeName = 'Preseason';
-          break;
-        case 2:
-          seasonType = 'regular';
-          seasonTypeName = 'Regular Season';
-          break;
-        case 3:
-          seasonType = 'postseason';
-          seasonTypeName = 'Playoffs';
-          break;
-        case 4:
-          seasonType = 'offseason';
-          seasonTypeName = 'Offseason';
-          break;
-        default:
-          seasonType = `unknown_${espnSeasonTypeId}`;
-          seasonTypeName = `Unknown Type ${espnSeasonTypeId}`;
-      }
-    }
-    
-    console.log(`📊 Processing Week ${currentWeek}, Year ${currentYear}, Type: ${seasonTypeName} (ESPN ID: ${espnSeasonTypeId})`);
-    console.log(`🏈 Found ${scoreboardData.events.length} games this week`);
-    
     // Process all games for the week
     const allPlayerStats = [];
     const allDstStats = [];
@@ -584,7 +619,8 @@ router.post('/weekly-update', async (req, res) => {
     let processedGames = 0;
     let failedGames = 0;
     
-    for (const game of scoreboardData.events) {
+    // Only process completed games
+    for (const game of completedGames) {
       console.log(`\n🏈 Processing game: ${game.name} (ID: ${game.id})`);
       
       try {
@@ -697,17 +733,17 @@ router.post('/weekly-update', async (req, res) => {
               // Check if we already have stats for this player in this week
               let existingPlayerStat = allPlayerStats.find(stat => 
                 stat.player_id === playerId && 
-                stat.week === currentWeek && 
-                stat.year === currentYear
+                stat.week === week && 
+                stat.year === year
               );
               
               if (!existingPlayerStat) {
                 // First time processing this player this week, create new stat object
                 existingPlayerStat = {
                   player_id: playerId,
-                  week: currentWeek,
-                  year: currentYear,
-                  season_type: finalSeasonType.toLowerCase(),
+                  week: week,
+                  year: year,
+                  season_type: seasonType.toLowerCase(),
                   source: 'espn',
                   // Initialize all stats to 0
                   passing_yards: 0, passing_touchdowns: 0, interceptions: 0,
@@ -788,10 +824,11 @@ router.post('/weekly-update', async (req, res) => {
     console.log(`✅ Created ${playersCreated} new players`);
     
     // Process D/ST stats for all games using team-level data
-    console.log(`\n🛡️ Processing D/ST stats for all games...`);
+    console.log(`\n🛡️ Processing D/ST stats for completed games...`);
     const allDSTStats = [];
     
-    for (const game of scoreboardData.events) {
+    // Only process completed games for D/ST stats too
+    for (const game of completedGames) {
       try {
         // Get detailed game stats from ESPN Game Summary API
         const gameSummaryUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${game.id}`;
@@ -810,12 +847,12 @@ router.post('/weekly-update', async (req, res) => {
         }
         
         // Process D/ST stats for this game using team-level data
-        const dstResults = processGameForDST(gameSummaryData, currentWeek, currentYear);
+        const dstResults = processGameForDST(gameSummaryData, week, year);
         
         // Add week/year info if missing
         for (const dstStat of dstResults) {
-          if (!dstStat.week) dstStat.week = currentWeek;
-          if (!dstStat.year) dstStat.year = currentYear;
+          if (!dstStat.week) dstStat.week = week;
+          if (!dstStat.year) dstStat.year = year;
           dstStat.season_type = seasonType.toLowerCase();
           dstStat.source = 'espn';
         }
@@ -975,8 +1012,8 @@ router.post('/weekly-update', async (req, res) => {
             const bestBallResult = await calculateLeagueWeeklyScores(
               db, 
               league.id, 
-              currentWeek, 
-              currentYear, 
+              week, 
+              year, 
               seasonType
             );
             bestBallResults.push({
@@ -1003,10 +1040,10 @@ router.post('/weekly-update', async (req, res) => {
     
     console.log(`🏈 Best Ball scoring complete for ${bestBallResults.length} leagues`);
     
-    res.json({
-      message: `Weekly stats update complete for Week ${currentWeek}`,
-      week: currentWeek,
-      year: currentYear,
+    return {
+      success: true,
+      week,
+      year,
       season_type: seasonType,
       season_type_name: seasonTypeName,
       espn_season_type_id: espnSeasonTypeId,
@@ -1019,13 +1056,148 @@ router.post('/weekly-update', async (req, res) => {
       dst_stats_collected: allDSTStats.length,
       dst_inserted_count: dstInsertedCount,
       dst_updated_count: dstUpdatedCount,
-      best_ball_results: bestBallResults,
+      best_ball_results: bestBallResults
+    };
+    
+  } catch (error) {
+    console.error(`❌ Error processing Week ${week}:`, error);
+    return {
+      success: false,
+      week,
+      error: error.message
+    };
+  }
+}
+
+// POST import weekly stats (new endpoint for entire week)
+// No auth required - safe system operation (pulls from ESPN and updates stats)
+// Now processes ALL weeks from 1 to current week
+router.post('/weekly-update', async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    
+    console.log('🔄 Starting weekly stats update for all weeks...');
+    
+    // First get the current week status from ESPN Scoreboard API
+    const scoreboardResponse = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard');
+    
+    if (!scoreboardResponse.ok) {
+      return res.status(500).json({ error: 'Failed to get current week status from ESPN' });
+    }
+    
+    const scoreboardData = await scoreboardResponse.json();
+    
+    const currentWeek = parseInt(scoreboardData.week?.number) || 1;
+    const currentYear = scoreboardData.season?.year || new Date().getFullYear();
+    
+    // Map ESPN's numeric season type to meaningful names
+    const espnSeasonTypeId = scoreboardData.season?.type;
+    let seasonType = 'Unknown';
+    let seasonTypeName = 'Unknown';
+    
+    if (espnSeasonTypeId !== undefined) {
+      switch (espnSeasonTypeId) {
+        case 1:
+          seasonType = 'preseason';
+          seasonTypeName = 'Preseason';
+          break;
+        case 2:
+          seasonType = 'regular';
+          seasonTypeName = 'Regular Season';
+          break;
+        case 3:
+          seasonType = 'postseason';
+          seasonTypeName = 'Playoffs';
+          break;
+        case 4:
+          seasonType = 'offseason';
+          seasonTypeName = 'Offseason';
+          break;
+        default:
+          seasonType = `unknown_${espnSeasonTypeId}`;
+          seasonTypeName = `Unknown Type ${espnSeasonTypeId}`;
+      }
+    }
+    
+    console.log(`📊 Current Week: ${currentWeek}, Year: ${currentYear}, Type: ${seasonTypeName}`);
+    console.log(`🔄 Processing weeks 1 through ${currentWeek} for ${seasonTypeName}...`);
+    console.log(`⚠️ Note: Only weeks with actual games will be processed`);
+    
+    // Process all weeks from 1 to current week
+    // Each week will detect its own season type from ESPN data
+    const weekResults = [];
+    let totalGamesProcessed = 0;
+    let totalGamesFailed = 0;
+    let totalPlayersCreated = 0;
+    let totalStatsInserted = 0;
+    let totalStatsUpdated = 0;
+    let weeksSkipped = 0;
+    
+    for (let week = 1; week <= currentWeek; week++) {
+      console.log(`\n${'='.repeat(60)}`);
+      console.log(`📅 Processing Week ${week} of ${currentWeek}`);
+      console.log(`${'='.repeat(60)}`);
+      
+      // Process week - pass the current season type ID to ensure we only get weeks from current season
+      // This prevents mixing regular season weeks when we're in playoffs (and vice versa)
+      const weekResult = await processWeekStats(db, week, currentYear, espnSeasonTypeId);
+      weekResults.push(weekResult);
+      
+      if (weekResult.skipped) {
+        weeksSkipped++;
+      }
+      
+      if (weekResult.success) {
+        totalGamesProcessed += weekResult.games_processed || 0;
+        totalGamesFailed += weekResult.games_failed || 0;
+        totalPlayersCreated += weekResult.players_created || 0;
+        totalStatsInserted += weekResult.inserted_count || 0;
+        totalStatsUpdated += weekResult.updated_count || 0;
+        console.log(`✅ Week ${week} completed successfully`);
+      } else {
+        console.log(`❌ Week ${week} failed: ${weekResult.error}`);
+      }
+      
+      // Small delay between weeks to avoid rate limiting
+      if (week < currentWeek) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`🎉 All weeks processed!`);
+    console.log(`${'='.repeat(60)}`);
+    console.log(`Weeks processed: ${weekResults.filter(r => r.success && !r.skipped).length}`);
+    console.log(`Weeks skipped (no games): ${weeksSkipped}`);
+    console.log(`Weeks failed: ${weekResults.filter(r => !r.success).length}`);
+    console.log(`Total games processed: ${totalGamesProcessed}`);
+    console.log(`Total games failed: ${totalGamesFailed}`);
+    console.log(`Total players created: ${totalPlayersCreated}`);
+    console.log(`Total stats inserted: ${totalStatsInserted}`);
+    console.log(`Total stats updated: ${totalStatsUpdated}`);
+    
+    res.json({
+      message: `Weekly stats update complete for Weeks 1-${currentWeek} (${seasonTypeName})`,
+      current_week: currentWeek,
+      year: currentYear,
+      current_season_type: seasonType,
+      current_season_type_name: seasonTypeName,
+      espn_season_type_id: espnSeasonTypeId,
+      weeks_processed: weekResults.filter(r => r.success && !r.skipped).length,
+      weeks_skipped: weeksSkipped,
+      weeks_failed: weekResults.filter(r => !r.success).length,
+      total_games_processed: totalGamesProcessed,
+      total_games_failed: totalGamesFailed,
+      total_players_created: totalPlayersCreated,
+      total_stats_inserted: totalStatsInserted,
+      total_stats_updated: totalStatsUpdated,
+      week_results: weekResults,
       timestamp: new Date().toISOString()
     });
     
   } catch (error) {
     console.error('❌ Weekly stats update failed:', error);
-    res.status(500).json({ error: 'Failed to update weekly stats' });
+    res.status(500).json({ error: 'Failed to update weekly stats', details: error.message });
   }
 });
 
