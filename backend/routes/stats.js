@@ -590,26 +590,42 @@ async function processWeekStats(db, week, year, seasonTypeId = null) {
   console.log(`📊 Week ${week} detected as: ${seasonTypeName} (ESPN ID: ${espnSeasonTypeId})`);
   console.log(`🏈 Found ${scoreboardData.events.length} games for Week ${week}`);
   
-  // Check if any games have actually been played (have scores/stats)
-  // Future games will exist in the events array but won't have completed status
-  const completedGames = scoreboardData.events.filter(game => {
-    const status = game.status?.type?.completed || game.competitions?.[0]?.status?.type?.completed;
-    return status === true || game.status?.type?.name === 'STATUS_FINAL';
+  // Process games that are completed OR in progress (so we can get live stats)
+  // Skip games that haven't started yet (scheduled/pregame)
+  const processableGames = scoreboardData.events.filter(game => {
+    const statusName = game.status?.type?.name || game.competitions?.[0]?.status?.type?.name;
+    const isCompleted = game.status?.type?.completed || game.competitions?.[0]?.status?.type?.completed;
+    
+    // Include games that are:
+    // 1. Completed/Final
+    // 2. In progress
+    // 3. Halftime (stats available)
+    // 4. End of period (stats available)
+    // Exclude: scheduled, pregame, postponed, etc.
+    return isCompleted === true || 
+           statusName === 'STATUS_FINAL' ||
+           statusName === 'STATUS_IN_PROGRESS' ||
+           statusName === 'STATUS_HALFTIME' ||
+           statusName === 'STATUS_END_PERIOD';
   });
   
-  if (completedGames.length === 0) {
-    console.log(`⚠️ Week ${week} has ${scoreboardData.events.length} scheduled games but none have been completed yet - skipping`);
+  if (processableGames.length === 0) {
+    console.log(`⚠️ Week ${week} has ${scoreboardData.events.length} scheduled games but none are processable yet (all may be scheduled/pregame) - skipping`);
     return {
       success: true,
       week,
       games_processed: 0,
       games_failed: 0,
       skipped: true,
-      message: `Week ${week} has scheduled games but none completed yet`
+      message: `Week ${week} has scheduled games but none processable yet`
     };
   }
   
-  console.log(`✅ Week ${week} has ${completedGames.length} completed games out of ${scoreboardData.events.length} total`);
+  const completedCount = processableGames.filter(g => 
+    g.status?.type?.completed === true || g.status?.type?.name === 'STATUS_FINAL'
+  ).length;
+  
+  console.log(`✅ Week ${week} has ${processableGames.length} processable games (${completedCount} completed, ${processableGames.length - completedCount} in progress) out of ${scoreboardData.events.length} total`);
   
   try {
     // Process all games for the week
@@ -619,9 +635,11 @@ async function processWeekStats(db, week, year, seasonTypeId = null) {
     let processedGames = 0;
     let failedGames = 0;
     
-    // Only process completed games
-    for (const game of completedGames) {
-      console.log(`\n🏈 Processing game: ${game.name} (ID: ${game.id})`);
+    // Process games that are completed or in progress
+    for (const game of processableGames) {
+      const gameStatus = game.status?.type?.name || 'UNKNOWN';
+      const isCompleted = game.status?.type?.completed === true || gameStatus === 'STATUS_FINAL';
+      console.log(`\n🏈 Processing game: ${game.name} (ID: ${game.id}) - Status: ${gameStatus} ${isCompleted ? '(Completed)' : '(In Progress)'}`);
       
       try {
         // Get detailed game stats from ESPN Game Summary API
@@ -827,8 +845,8 @@ async function processWeekStats(db, week, year, seasonTypeId = null) {
     console.log(`\n🛡️ Processing D/ST stats for completed games...`);
     const allDSTStats = [];
     
-    // Only process completed games for D/ST stats too
-    for (const game of completedGames) {
+    // Process games that are completed or in progress for D/ST stats
+    for (const game of processableGames) {
       try {
         // Get detailed game stats from ESPN Game Summary API
         const gameSummaryUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${game.id}`;
