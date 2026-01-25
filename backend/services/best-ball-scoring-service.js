@@ -311,6 +311,7 @@ export async function getSeasonTotals(db, leagueId, year, seasonType) {
     `, [year, seasonType]);
     
     const weeks = weeksResult.rows.map(row => row.week);
+    console.log(`📅 Found ${weeks.length} weeks with stats for ${year} ${seasonType}:`, weeks);
     
     if (weeks.length === 0) {
       // No weeks with stats, return teams with zero scores
@@ -432,10 +433,11 @@ export async function getSeasonTotals(db, leagueId, year, seasonType) {
           const weeklyScore = bestBallResult.weeklyScore || 0;
           teamData.weeklyScores.push(weeklyScore);
           
-          // Debug logging for first team
-          if (team.id === teamsResult.rows[0].id) {
-            console.log(`  📊 Week ${week} - ${team.name}: ${weeklyScore.toFixed(2)} points (${teamPlayers.length} players)`);
-          }
+          // Debug logging for all teams to see lineup selection
+          console.log(`  📊 Week ${week} - ${team.name}: ${weeklyScore.toFixed(2)} points`);
+          console.log(`     Lineup: QB: ${bestBallResult.optimalLineup.QB?.playerName || 'None'} (${bestBallResult.optimalLineup.QB?.fantasyPoints?.toFixed(2) || 0}), RB1: ${bestBallResult.optimalLineup.RB1?.playerName || 'None'} (${bestBallResult.optimalLineup.RB1?.fantasyPoints?.toFixed(2) || 0}), RB2: ${bestBallResult.optimalLineup.RB2?.playerName || 'None'} (${bestBallResult.optimalLineup.RB2?.fantasyPoints?.toFixed(2) || 0})`);
+          console.log(`     WR1: ${bestBallResult.optimalLineup.WR1?.playerName || 'None'} (${bestBallResult.optimalLineup.WR1?.fantasyPoints?.toFixed(2) || 0}), WR2: ${bestBallResult.optimalLineup.WR2?.playerName || 'None'} (${bestBallResult.optimalLineup.WR2?.fantasyPoints?.toFixed(2) || 0}), TE: ${bestBallResult.optimalLineup.TE?.playerName || 'None'} (${bestBallResult.optimalLineup.TE?.fantasyPoints?.toFixed(2) || 0})`);
+          console.log(`     FLEX: ${bestBallResult.optimalLineup.FLEX?.playerName || 'None'} (${bestBallResult.optimalLineup.FLEX?.fantasyPoints?.toFixed(2) || 0}), K: ${bestBallResult.optimalLineup.K?.playerName || 'None'} (${bestBallResult.optimalLineup.K?.fantasyPoints?.toFixed(2) || 0}), DEF: ${bestBallResult.optimalLineup.DEF?.playerName || 'None'} (${bestBallResult.optimalLineup.DEF?.fantasyPoints?.toFixed(2) || 0})`);
           
         } catch (error) {
           console.error(`Error calculating score for team ${team.id} week ${week}:`, error);
