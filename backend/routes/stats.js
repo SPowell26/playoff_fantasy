@@ -1223,6 +1223,10 @@ router.get('/standings/:leagueId/:week', async (req, res) => {
   }
 });
 
+// Simple in-memory cache for season totals (5 minute TTL to reduce database queries)
+const seasonTotalsCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 // GET season totals for all teams in a league
 router.get('/season-totals/:leagueId', async (req, res) => {
   try {
@@ -1230,8 +1234,33 @@ router.get('/season-totals/:leagueId', async (req, res) => {
     const { year = 2025, seasonType = 'preseason' } = req.query;
     const db = req.app.locals.db;
     
+    // Check cache first
+    const cacheKey = `${leagueId}-${year}-${seasonType}`;
+    const cached = seasonTotalsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+      console.log(`📦 Returning cached season totals for ${cacheKey}`);
+      return res.json({
+        seasonTotals: cached.data,
+        cached: true,
+        timestamp: new Date(cached.timestamp).toISOString()
+      });
+    }
+    
     const { getSeasonTotals } = await import('../services/best-ball-scoring-service.js');
     const seasonTotals = await getSeasonTotals(db, parseInt(leagueId), parseInt(year), seasonType);
+    
+    // Cache the result
+    seasonTotalsCache.set(cacheKey, {
+      data: seasonTotals,
+      timestamp: Date.now()
+    });
+    
+    // Clean up old cache entries (keep cache size reasonable)
+    if (seasonTotalsCache.size > 100) {
+      const oldestKey = Array.from(seasonTotalsCache.entries())
+        .sort((a, b) => a[1].timestamp - b[1].timestamp)[0][0];
+      seasonTotalsCache.delete(oldestKey);
+    }
     
     // Include weekly breakdowns in response for debugging
     const seasonTotalsWithBreakdown = seasonTotals.map(team => ({

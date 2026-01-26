@@ -62,11 +62,12 @@ const TeamPage = () => {
     }, [currentWeek, nflSeasonYear, league?.season_type, team?.id, league?.id]);
 
     // Fetch season totals from backend (for rankings and consistency check)
+    // Only fetch once when component mounts or when league/team changes (not on every render)
     const fetchTeamSeasonStats = useCallback(async () => {
         if (!league?.id || !nflSeasonYear || !team?.id) return;
         
         try {
-            const seasonTypeParam = seasonType;
+            const seasonTypeParam = league?.season_type || globalSeasonType || 'regular';
             const response = await fetch(
                 `${API_URL}/api/stats/season-totals/${league.id}?year=${nflSeasonYear}&seasonType=${seasonTypeParam}`
             );
@@ -81,19 +82,17 @@ const TeamPage = () => {
                     // Calculate rank - season totals are already sorted by total DESC
                     const rank = data.seasonTotals.findIndex(st => st.team_id === team.id) + 1;
                     setTeamRank(rank || null);
-                    
-                    // Log for debugging - compare backend vs frontend calculation
-                    console.log('📊 Backend season totals:', teamStats);
                 }
             }
         } catch (error) {
             console.error('❌ Error fetching team season stats:', error);
         }
-    }, [league?.id, nflSeasonYear, team?.id, seasonType]);
+    }, [league?.id, league?.season_type, nflSeasonYear, team?.id, globalSeasonType]);
 
+    // Only fetch once when component mounts or key values change (not on every seasonType recalculation)
     useEffect(() => {
         fetchTeamSeasonStats();
-    }, [fetchTeamSeasonStats]);
+    }, [league?.id, nflSeasonYear, team?.id, league?.season_type]);
     
     // REMOVED: Client-side calculation that was fetching stats for ALL weeks on every page load
     // This was causing excessive API calls (4+ per page view) and massive network egress
