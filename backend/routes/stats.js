@@ -1141,8 +1141,9 @@ router.post('/weekly-update', async (req, res) => {
     console.log(`🔄 Processing weeks 1 through ${currentWeek} for ${seasonTypeName}...`);
     console.log(`⚠️ Note: Only weeks with actual games will be processed`);
     
-    // Process all weeks from 1 to current week
-    // Each week will detect its own season type from ESPN data
+    // OPTIMIZATION: Only process the CURRENT week to reduce API calls and costs
+    // Previously processed all weeks 1-currentWeek, which was expensive
+    // Users can manually update past weeks if needed
     const weekResults = [];
     let totalGamesProcessed = 0;
     let totalGamesFailed = 0;
@@ -1151,35 +1152,30 @@ router.post('/weekly-update', async (req, res) => {
     let totalStatsUpdated = 0;
     let weeksSkipped = 0;
     
-    for (let week = 1; week <= currentWeek; week++) {
-      console.log(`\n${'='.repeat(60)}`);
-      console.log(`📅 Processing Week ${week} of ${currentWeek}`);
-      console.log(`${'='.repeat(60)}`);
+    // Only process current week (most recent stats)
+    // This reduces API calls from ~4 weeks × many games to just current week
+    const weekToProcess = currentWeek;
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`📅 Processing CURRENT Week ${weekToProcess} only (to reduce costs)`);
+    console.log(`${'='.repeat(60)}`);
+    
+    // Process only current week - pass the current season type ID
+    const weekResult = await processWeekStats(db, weekToProcess, currentYear, espnSeasonTypeId);
+    weekResults.push(weekResult);
       
-      // Process week - pass the current season type ID to ensure we only get weeks from current season
-      // This prevents mixing regular season weeks when we're in playoffs (and vice versa)
-      const weekResult = await processWeekStats(db, week, currentYear, espnSeasonTypeId);
-      weekResults.push(weekResult);
-      
-      if (weekResult.skipped) {
-        weeksSkipped++;
-      }
-      
-      if (weekResult.success) {
-        totalGamesProcessed += weekResult.games_processed || 0;
-        totalGamesFailed += weekResult.games_failed || 0;
-        totalPlayersCreated += weekResult.players_created || 0;
-        totalStatsInserted += weekResult.inserted_count || 0;
-        totalStatsUpdated += weekResult.updated_count || 0;
-        console.log(`✅ Week ${week} completed successfully`);
-      } else {
-        console.log(`❌ Week ${week} failed: ${weekResult.error}`);
-      }
-      
-      // Small delay between weeks to avoid rate limiting
-      if (week < currentWeek) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+    if (weekResult.skipped) {
+      weeksSkipped++;
+    }
+    
+    if (weekResult.success) {
+      totalGamesProcessed += weekResult.games_processed || 0;
+      totalGamesFailed += weekResult.games_failed || 0;
+      totalPlayersCreated += weekResult.players_created || 0;
+      totalStatsInserted += weekResult.inserted_count || 0;
+      totalStatsUpdated += weekResult.updated_count || 0;
+      console.log(`✅ Week ${weekToProcess} completed successfully`);
+    } else {
+      console.log(`❌ Week ${weekToProcess} failed: ${weekResult.error}`);
     }
     
     console.log(`\n${'='.repeat(60)}`);

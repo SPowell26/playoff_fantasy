@@ -256,9 +256,9 @@ export function startCronJobs(db, systemApiKey) {
   
   console.log('✅ [CRON] Schedule fetcher: Runs Wednesdays at 10 AM ET');
   
-    // Cron job: Pull stats every 5 minutes during game times
+    // Cron job: Pull stats every 15 minutes during game times (reduced to save costs)
     // Check if we're in the game time window before pulling
-    cronJobs.statPuller = cron.schedule('*/5 * * * *', async () => {
+    cronJobs.statPuller = cron.schedule('*/15 * * * *', async () => {
       const windowCheck = await isInGameTimeWindow(db);
       
       if (windowCheck.inWindow) {

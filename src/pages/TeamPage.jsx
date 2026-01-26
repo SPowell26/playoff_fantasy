@@ -95,89 +95,9 @@ const TeamPage = () => {
         fetchTeamSeasonStats();
     }, [fetchTeamSeasonStats]);
     
-    // Fetch stats for all weeks when component loads (needed for client-side calculation)
-    const [statsFetched, setStatsFetched] = useState(false);
-    
-    useEffect(() => {
-        if (team && availableWeeks.length && league?.season_type) {
-        // Extract week numbers - availableWeeks is array of {week, year} objects
-        const weekNumbers = availableWeeks
-            .map(w => typeof w === 'number' ? w : (w.week || w))
-            .filter(w => typeof w === 'number');
-        
-        if (weekNumbers.length === 0) {
-            console.warn('⚠️ No valid week numbers found in availableWeeks:', availableWeeks);
-            setStatsFetched(true);
-            return;
-        }
-        
-        Promise.all(
-            weekNumbers.map(week => fetchRealStats(week, nflSeasonYear, seasonType))
-        ).then(() => {
-            setStatsFetched(true);
-        }).catch(error => {
-            console.error('❌ Error fetching stats for all weeks:', error);
-            setStatsFetched(true); // Set to true anyway so calculation can proceed
-        });
-        }
-    }, [team, availableWeeks, league?.season_type, nflSeasonYear, seasonType, fetchRealStats]);
-    
-    // Also calculate client-side for comparison/verification (after stats are fetched)
-    const clientSideSeasonTotals = useMemo(() => {
-        if (!team || !availableWeeks.length || !league || !statsFetched) return null;
-        
-        // Extract week numbers - availableWeeks is array of {week, year} objects
-        const weekNumbers = availableWeeks
-            .map(w => typeof w === 'number' ? w : (w.week || w))
-            .filter(w => typeof w === 'number');
-        
-        if (weekNumbers.length === 0) {
-            console.warn('⚠️ No valid week numbers for client-side calculation');
-            return null;
-        }
-        
-        const weeklyScores = [];
-        let seasonTotal = 0;
-        
-        // Calculate score for each available week using the same logic as current week
-        for (const week of weekNumbers) {
-            
-            const weekTeamWithStats = {
-                ...team,
-                players: (team.players || []).map(player => {
-                    const playerWithStats = getPlayerWithRealStats(player.player_id, week, seasonType);
-                    return playerWithStats || { ...player, stats: {} };
-                })
-            };
-            
-            const weekScoreData = calculateTeamScoreWithStats(weekTeamWithStats, league, getPlayerWithRealStats, week, seasonType);
-            const weekScore = weekScoreData.weeklyScore || 0;
-            
-            if (weekScore > 0) {
-                weeklyScores.push({ week, score: weekScore });
-                seasonTotal += weekScore;
-            }
-        }
-        
-        return {
-            season_total: Math.round(seasonTotal * 100) / 100,
-            weeks_played: weeklyScores.length,
-            weekly_breakdown: weeklyScores
-        };
-    }, [team, availableWeeks, league, seasonType, getPlayerWithRealStats, statsFetched]);
-    
-    // Log comparison for debugging
-    useEffect(() => {
-        if (teamSeasonStats && clientSideSeasonTotals) {
-            console.log('🔍 Season Totals Comparison:');
-            console.log('  Backend:', teamSeasonStats.season_total);
-            console.log('  Client-side:', clientSideSeasonTotals.season_total);
-            console.log('  Difference:', Math.abs((teamSeasonStats.season_total || 0) - (clientSideSeasonTotals.season_total || 0)).toFixed(2));
-            if (clientSideSeasonTotals.weekly_breakdown) {
-                console.log('  Client-side breakdown:', clientSideSeasonTotals.weekly_breakdown);
-            }
-        }
-    }, [teamSeasonStats, clientSideSeasonTotals]);
+    // REMOVED: Client-side calculation that was fetching stats for ALL weeks on every page load
+    // This was causing excessive API calls (4+ per page view) and massive network egress
+    // We'll just use the backend season totals from cached scores instead
 
     const fetchAvailableWeeks = async () => {
         try {
