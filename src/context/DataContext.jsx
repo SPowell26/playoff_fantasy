@@ -332,13 +332,32 @@ export function DataProvider({ children }) {
         };
 
         // Function to fetch real playoff stats from backend
-        const fetchRealStats = async (week = 1, year = 2024, seasonType = null) => {
+        const fetchRealStats = async (week = 1, year = 2024, seasonType = null, teamId = null, leagueId = null) => {
             try {
                 console.log(`🔄 Fetching real stats for week ${week}, year ${year}, seasonType: ${seasonType || 'all'}...`);
-                let url = `${API_URL}/api/stats/scoring-ready/${week}?year=${year}`;
-                if (seasonType) {
-                    url += `&seasonType=${seasonType}`;
+                
+                // Use most specific endpoint available to minimize data transfer:
+                // 1. Team-specific (smallest - only that team's roster)
+                // 2. League-specific (medium - all rosters in league)
+                // 3. All players (largest - fallback)
+                let url;
+                if (teamId && leagueId) {
+                    url = `${API_URL}/api/stats/scoring-ready/${week}/team/${teamId}?year=${year}&leagueId=${leagueId}`;
+                    if (seasonType) {
+                        url += `&seasonType=${seasonType}`;
+                    }
+                } else if (leagueId) {
+                    url = `${API_URL}/api/stats/scoring-ready/${week}/league/${leagueId}?year=${year}`;
+                    if (seasonType) {
+                        url += `&seasonType=${seasonType}`;
+                    }
+                } else {
+                    url = `${API_URL}/api/stats/scoring-ready/${week}?year=${year}`;
+                    if (seasonType) {
+                        url += `&seasonType=${seasonType}`;
+                    }
                 }
+                
                 const response = await fetch(url);
                 
                 // Store stats with composite key: week-seasonType (even if empty)

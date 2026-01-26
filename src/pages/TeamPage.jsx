@@ -53,13 +53,13 @@ const TeamPage = () => {
     }, [league?.season_type, league?.id, nflSeasonYear]);
 
     // Fetch stats when week, year, or league season_type changes
-    // Don't fetch until league data is loaded to ensure we use the correct season_type
+    // Use team-specific endpoint to only fetch roster players (much smaller response)
     useEffect(() => {
-        if (currentWeek && nflSeasonYear && league?.season_type) {
+        if (currentWeek && nflSeasonYear && league?.season_type && team?.id && league?.id) {
             console.log(`🔄 Fetching stats for week ${currentWeek}, year ${nflSeasonYear}, season_type: ${league.season_type}`);
-            fetchRealStats(currentWeek, nflSeasonYear, league.season_type);
+            fetchRealStats(currentWeek, nflSeasonYear, league.season_type, team.id, league.id);
         }
-    }, [currentWeek, nflSeasonYear, league?.season_type]);
+    }, [currentWeek, nflSeasonYear, league?.season_type, team?.id, league?.id]);
 
     // Fetch season totals from backend (for rankings and consistency check)
     const fetchTeamSeasonStats = useCallback(async () => {

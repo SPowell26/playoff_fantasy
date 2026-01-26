@@ -105,16 +105,16 @@ const LeaguePage = () => {
   }, [league, leagueId, navigate, leagues.length]);
 
   // Fetch real stats when currentWeek, nflSeasonYear, and league are available
-  // Use league's season_type to filter stats correctly
+  // Use league-specific endpoint to only fetch roster players (much smaller response)
   useEffect(() => {
-    if (currentWeek && nflSeasonYear && league && league.season_type) {
+    if (currentWeek && nflSeasonYear && league && league.season_type && league.id) {
       console.log('🔄 Fetching real stats for league page:', { 
         currentWeek, 
         nflSeasonYear, 
         league: league.name,
         season_type: league.season_type 
       });
-      fetchRealStats(currentWeek, nflSeasonYear, league.season_type);
+      fetchRealStats(currentWeek, nflSeasonYear, league.season_type, null, league.id);
     }
   }, [currentWeek, nflSeasonYear, league?.id, league?.season_type]);
 

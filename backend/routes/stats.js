@@ -522,28 +522,34 @@ router.post('/import-playoff', requireCommissionerOrSystem, async (req, res) => 
 });
 
 // Helper function to process stats for a single week
-async function processWeekStats(db, week, year, seasonTypeId = null) {
+// If scoreboardData is provided, uses it instead of making another API call (saves costs)
+async function processWeekStats(db, week, year, seasonTypeId = null, scoreboardData = null) {
   console.log(`\n📊 Processing Week ${week}, Year ${year}`);
   
-  // Build scoreboard URL - include season type if provided to avoid mixing regular season and playoffs
-  let scoreboardUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&year=${year}`;
-  if (seasonTypeId) {
-    scoreboardUrl += `&seasontype=${seasonTypeId}`;
-    console.log(`  📊 Using season type ID: ${seasonTypeId}`);
+  // Use provided scoreboard data if available (avoids extra API call)
+  if (!scoreboardData) {
+    // Build scoreboard URL - include season type if provided to avoid mixing regular season and playoffs
+    let scoreboardUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&year=${year}`;
+    if (seasonTypeId) {
+      scoreboardUrl += `&seasontype=${seasonTypeId}`;
+      console.log(`  📊 Using season type ID: ${seasonTypeId}`);
+    }
+    
+    const scoreboardResponse = await fetch(scoreboardUrl);
+    
+    if (!scoreboardResponse.ok) {
+      console.log(`❌ Failed to get scoreboard for Week ${week}: ${scoreboardResponse.status}`);
+      return {
+        success: false,
+        week,
+        error: `Failed to get scoreboard: ${scoreboardResponse.status}`
+      };
+    }
+    
+    scoreboardData = await scoreboardResponse.json();
+  } else {
+    console.log(`  ✅ Using provided scoreboard data (no extra API call)`);
   }
-  
-  const scoreboardResponse = await fetch(scoreboardUrl);
-  
-  if (!scoreboardResponse.ok) {
-    console.log(`❌ Failed to get scoreboard for Week ${week}: ${scoreboardResponse.status}`);
-    return {
-      success: false,
-      week,
-      error: `Failed to get scoreboard: ${scoreboardResponse.status}`
-    };
-  }
-  
-  const scoreboardData = await scoreboardResponse.json();
   
   // Check if there are actually any games for this week
   if (!scoreboardData.events || !Array.isArray(scoreboardData.events) || scoreboardData.events.length === 0) {
@@ -1087,16 +1093,16 @@ async function processWeekStats(db, week, year, seasonTypeId = null) {
   }
 }
 
-// POST import weekly stats (new endpoint for entire week)
-// No auth required - safe system operation (pulls from ESPN and updates stats)
-// Now processes ALL weeks from 1 to current week
+// POST import weekly stats (reverted to original efficient pattern)
+// Processes games directly from scoreboard response (no extra API calls)
+// Keeps all new scoring logic (2-point conversions, defensive TDs, etc.)
 router.post('/weekly-update', async (req, res) => {
   try {
     const db = req.app.locals.db;
     
-    console.log('🔄 Starting weekly stats update for all weeks...');
+    console.log('🔄 Starting weekly stats update...');
     
-    // First get the current week status from ESPN Scoreboard API
+    // Get current week status from ESPN Scoreboard API (single API call)
     const scoreboardResponse = await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard');
     
     if (!scoreboardResponse.ok) {
@@ -1104,6 +1110,10 @@ router.post('/weekly-update', async (req, res) => {
     }
     
     const scoreboardData = await scoreboardResponse.json();
+    
+    if (!scoreboardData.events || !Array.isArray(scoreboardData.events)) {
+      return res.status(400).json({ error: 'No events found for current week' });
+    }
     
     const currentWeek = parseInt(scoreboardData.week?.number) || 1;
     const currentYear = scoreboardData.season?.year || new Date().getFullYear();
@@ -1137,75 +1147,48 @@ router.post('/weekly-update', async (req, res) => {
       }
     }
     
-    console.log(`📊 Current Week: ${currentWeek}, Year: ${currentYear}, Type: ${seasonTypeName}`);
-    console.log(`🔄 Processing weeks 1 through ${currentWeek} for ${seasonTypeName}...`);
-    console.log(`⚠️ Note: Only weeks with actual games will be processed`);
+    console.log(`📊 Processing Week ${currentWeek}, Year ${currentYear}, Type: ${seasonTypeName} (ESPN ID: ${espnSeasonTypeId})`);
+    console.log(`🏈 Found ${scoreboardData.events.length} games this week`);
     
-    // OPTIMIZATION: Only process the CURRENT week to reduce API calls and costs
-    // Previously processed all weeks 1-currentWeek, which was expensive
-    // Users can manually update past weeks if needed
-    const weekResults = [];
-    let totalGamesProcessed = 0;
-    let totalGamesFailed = 0;
-    let totalPlayersCreated = 0;
-    let totalStatsInserted = 0;
-    let totalStatsUpdated = 0;
-    let weeksSkipped = 0;
+    // Process games directly from scoreboard (no extra API call like processWeekStats does)
+    // Filter to only processable games (completed or in progress)
+    const processableGames = scoreboardData.events.filter(game => {
+      const statusName = game.status?.type?.name || game.competitions?.[0]?.status?.type?.name;
+      const isCompleted = game.status?.type?.completed || game.competitions?.[0]?.status?.type?.completed;
+      return isCompleted === true || 
+             statusName === 'STATUS_FINAL' ||
+             statusName === 'STATUS_IN_PROGRESS' ||
+             statusName === 'STATUS_HALFTIME' ||
+             statusName === 'STATUS_END_PERIOD';
+    });
     
-    // Only process current week (most recent stats)
-    // This reduces API calls from ~4 weeks × many games to just current week
-    const weekToProcess = currentWeek;
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`📅 Processing CURRENT Week ${weekToProcess} only (to reduce costs)`);
-    console.log(`${'='.repeat(60)}`);
-    
-    // Process only current week - pass the current season type ID
-    const weekResult = await processWeekStats(db, weekToProcess, currentYear, espnSeasonTypeId);
-    weekResults.push(weekResult);
-      
-    if (weekResult.skipped) {
-      weeksSkipped++;
+    if (processableGames.length === 0) {
+      return res.json({
+        message: `No processable games found for Week ${currentWeek}`,
+        current_week: currentWeek,
+        year: currentYear,
+        current_season_type: seasonType,
+        games_found: scoreboardData.events.length,
+        games_processable: 0
+      });
     }
     
-    if (weekResult.success) {
-      totalGamesProcessed += weekResult.games_processed || 0;
-      totalGamesFailed += weekResult.games_failed || 0;
-      totalPlayersCreated += weekResult.players_created || 0;
-      totalStatsInserted += weekResult.inserted_count || 0;
-      totalStatsUpdated += weekResult.updated_count || 0;
-      console.log(`✅ Week ${weekToProcess} completed successfully`);
-    } else {
-      console.log(`❌ Week ${weekToProcess} failed: ${weekResult.error}`);
-    }
-    
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`🎉 All weeks processed!`);
-    console.log(`${'='.repeat(60)}`);
-    console.log(`Weeks processed: ${weekResults.filter(r => r.success && !r.skipped).length}`);
-    console.log(`Weeks skipped (no games): ${weeksSkipped}`);
-    console.log(`Weeks failed: ${weekResults.filter(r => !r.success).length}`);
-    console.log(`Total games processed: ${totalGamesProcessed}`);
-    console.log(`Total games failed: ${totalGamesFailed}`);
-    console.log(`Total players created: ${totalPlayersCreated}`);
-    console.log(`Total stats inserted: ${totalStatsInserted}`);
-    console.log(`Total stats updated: ${totalStatsUpdated}`);
+    // Process games using processWeekStats but pass scoreboard data to avoid extra API call
+    // This keeps all the new scoring logic (2-point conversions, defensive TDs, etc.)
+    const weekResult = await processWeekStats(db, currentWeek, currentYear, espnSeasonTypeId, scoreboardData);
     
     res.json({
-      message: `Weekly stats update complete for Weeks 1-${currentWeek} (${seasonTypeName})`,
+      message: `Weekly stats update complete for Week ${currentWeek} (${seasonTypeName})`,
       current_week: currentWeek,
       year: currentYear,
       current_season_type: seasonType,
       current_season_type_name: seasonTypeName,
       espn_season_type_id: espnSeasonTypeId,
-      weeks_processed: weekResults.filter(r => r.success && !r.skipped).length,
-      weeks_skipped: weeksSkipped,
-      weeks_failed: weekResults.filter(r => !r.success).length,
-      total_games_processed: totalGamesProcessed,
-      total_games_failed: totalGamesFailed,
-      total_players_created: totalPlayersCreated,
-      total_stats_inserted: totalStatsInserted,
-      total_stats_updated: totalStatsUpdated,
-      week_results: weekResults,
+      games_processed: weekResult.games_processed || 0,
+      games_failed: weekResult.games_failed || 0,
+      players_created: weekResult.players_created || 0,
+      stats_inserted: weekResult.inserted_count || 0,
+      stats_updated: weekResult.updated_count || 0,
       timestamp: new Date().toISOString()
     });
     
@@ -1478,6 +1461,228 @@ router.get('/scoring-ready/:week', async (req, res) => {
   } catch (error) {
     console.error('Error formatting stats for scoring:', error);
     res.status(500).json({ error: 'Failed to format stats for scoring' });
+  }
+});
+
+// GET stats for a specific team's roster players only (much smaller response)
+// This is more efficient than fetching all players when you only need one team's stats
+router.get('/scoring-ready/:week/team/:teamId', async (req, res) => {
+  try {
+    const { week, teamId } = req.params;
+    const { year = 2024, seasonType, leagueId } = req.query;
+    const db = req.app.locals.db;
+    
+    if (!leagueId) {
+      return res.status(400).json({ error: 'leagueId query parameter is required' });
+    }
+    
+    // Get team roster player IDs
+    const rosterResult = await db.query(`
+      SELECT DISTINCT player_id 
+      FROM team_rosters 
+      WHERE team_id = $1 AND league_id = $2
+    `, [parseInt(teamId), parseInt(leagueId)]);
+    
+    if (rosterResult.rows.length === 0) {
+      return res.json({
+        week: parseInt(week),
+        year: parseInt(year),
+        count: 0,
+        players: [],
+        message: 'No players on roster'
+      });
+    }
+    
+    const playerIds = rosterResult.rows.map(row => row.player_id);
+    
+    // Build query for only roster players
+    let query = `
+      SELECT 
+        ps.*,
+        p.name as player_name,
+        p.position,
+        p.team
+      FROM player_stats ps
+      JOIN players p ON ps.player_id = p.id
+      WHERE ps.week = $1 AND ps.year = $2
+        AND ps.player_id = ANY($3::integer[])
+    `;
+    
+    const params = [parseInt(week), parseInt(year), playerIds];
+    
+    // Filter by season_type if provided
+    if (seasonType) {
+      query += ` AND ps.season_type = $4`;
+      params.push(seasonType);
+    }
+    
+    query += ` ORDER BY p.position, p.name`;
+    
+    // Get stats for only roster players (much smaller dataset)
+    const result = await db.query(query, params);
+    
+    // Transform database format to scoring engine format (same as /scoring-ready/:week)
+    const scoringReadyStats = result.rows.map(stat => ({
+      id: stat.player_id,
+      name: stat.player_name,
+      position: stat.position,
+      team: stat.team,
+      weeklyStats: {
+        [week]: {
+          passingYards: stat.passing_yards || 0,
+          passingTD: stat.passing_touchdowns || 0,
+          interceptions: (stat.position === 'D/ST' || stat.position === 'DEF') 
+            ? (stat.interceptions_defense || 0)
+            : (stat.interceptions || 0),
+          rushingYards: stat.rushing_yards || 0,
+          rushingTD: stat.rushing_touchdowns || 0,
+          receivingYards: stat.receiving_yards || 0,
+          receivingTD: stat.receiving_touchdowns || 0,
+          receptions: stat.receptions || 0,
+          fumbles: stat.fumbles_lost || 0,
+          fieldGoals0_39: stat.field_goals_0_39 || 0,
+          fieldGoals40_49: stat.field_goals_40_49 || 0,
+          fieldGoals50_plus: stat.field_goals_50_plus || 0,
+          fieldGoalsMade: (stat.field_goals_0_39 || 0) + (stat.field_goals_40_49 || 0) + (stat.field_goals_50_plus || 0),
+          extraPointsMade: stat.extra_points || 0,
+          fieldGoalsMissed: stat.field_goals_missed || 0,
+          extraPointsMissed: stat.extra_points_missed || 0,
+          sacks: stat.sacks || 0,
+          fumbleRecoveries: stat.fumble_recoveries || 0,
+          safeties: stat.safeties || 0,
+          twoPointConversionsPassing: stat.two_point_conversions_passing || 0,
+          twoPointConversionsReceiving: stat.two_point_conversions_receiving || 0,
+          blockedKicks: stat.blocked_kicks || 0,
+          puntReturnTD: stat.punt_return_touchdowns || 0,
+          kickoffReturnTD: stat.kickoff_return_touchdowns || 0,
+          defensiveTDs: stat.defensive_touchdowns || 0,
+          pointsAllowed: stat.points_allowed || 0,
+          teamWin: stat.team_win === true || stat.team_win === 1 || stat.team_win === 'true',
+          team_win: stat.team_win === true || stat.team_win === 1 || stat.team_win === 'true'
+        }
+      }
+    }));
+    
+    res.json({
+      week: parseInt(week),
+      year: parseInt(year),
+      count: scoringReadyStats.length,
+      players: scoringReadyStats,
+      message: 'Stats formatted for scoring engine (team roster only)'
+    });
+    
+  } catch (error) {
+    console.error('Error formatting team stats for scoring:', error);
+    res.status(500).json({ error: 'Failed to format team stats for scoring' });
+  }
+});
+
+// GET stats for all roster players in a league (much smaller than all players)
+// This is more efficient for league pages that need stats for all teams' rosters
+router.get('/scoring-ready/:week/league/:leagueId', async (req, res) => {
+  try {
+    const { week, leagueId } = req.params;
+    const { year = 2024, seasonType } = req.query;
+    const db = req.app.locals.db;
+    
+    // Get all roster player IDs for this league
+    const rosterResult = await db.query(`
+      SELECT DISTINCT player_id 
+      FROM team_rosters 
+      WHERE league_id = $1
+    `, [parseInt(leagueId)]);
+    
+    if (rosterResult.rows.length === 0) {
+      return res.json({
+        week: parseInt(week),
+        year: parseInt(year),
+        count: 0,
+        players: [],
+        message: 'No players on rosters in this league'
+      });
+    }
+    
+    const playerIds = rosterResult.rows.map(row => row.player_id);
+    
+    // Build query for only roster players in this league
+    let query = `
+      SELECT 
+        ps.*,
+        p.name as player_name,
+        p.position,
+        p.team
+      FROM player_stats ps
+      JOIN players p ON ps.player_id = p.id
+      WHERE ps.week = $1 AND ps.year = $2
+        AND ps.player_id = ANY($3::integer[])
+    `;
+    
+    const params = [parseInt(week), parseInt(year), playerIds];
+    
+    // Filter by season_type if provided
+    if (seasonType) {
+      query += ` AND ps.season_type = $4`;
+      params.push(seasonType);
+    }
+    
+    query += ` ORDER BY p.position, p.name`;
+    
+    // Get stats for only roster players in this league (much smaller dataset)
+    const result = await db.query(query, params);
+    
+    // Transform database format to scoring engine format (same as /scoring-ready/:week)
+    const scoringReadyStats = result.rows.map(stat => ({
+      id: stat.player_id,
+      name: stat.player_name,
+      position: stat.position,
+      team: stat.team,
+      weeklyStats: {
+        [week]: {
+          passingYards: stat.passing_yards || 0,
+          passingTD: stat.passing_touchdowns || 0,
+          interceptions: (stat.position === 'D/ST' || stat.position === 'DEF') 
+            ? (stat.interceptions_defense || 0)
+            : (stat.interceptions || 0),
+          rushingYards: stat.rushing_yards || 0,
+          rushingTD: stat.rushing_touchdowns || 0,
+          receivingYards: stat.receiving_yards || 0,
+          receivingTD: stat.receiving_touchdowns || 0,
+          receptions: stat.receptions || 0,
+          fumbles: stat.fumbles_lost || 0,
+          fieldGoals0_39: stat.field_goals_0_39 || 0,
+          fieldGoals40_49: stat.field_goals_40_49 || 0,
+          fieldGoals50_plus: stat.field_goals_50_plus || 0,
+          fieldGoalsMade: (stat.field_goals_0_39 || 0) + (stat.field_goals_40_49 || 0) + (stat.field_goals_50_plus || 0),
+          extraPointsMade: stat.extra_points || 0,
+          fieldGoalsMissed: stat.field_goals_missed || 0,
+          extraPointsMissed: stat.extra_points_missed || 0,
+          sacks: stat.sacks || 0,
+          fumbleRecoveries: stat.fumble_recoveries || 0,
+          safeties: stat.safeties || 0,
+          twoPointConversionsPassing: stat.two_point_conversions_passing || 0,
+          twoPointConversionsReceiving: stat.two_point_conversions_receiving || 0,
+          blockedKicks: stat.blocked_kicks || 0,
+          puntReturnTD: stat.punt_return_touchdowns || 0,
+          kickoffReturnTD: stat.kickoff_return_touchdowns || 0,
+          defensiveTDs: stat.defensive_touchdowns || 0,
+          pointsAllowed: stat.points_allowed || 0,
+          teamWin: stat.team_win === true || stat.team_win === 1 || stat.team_win === 'true',
+          team_win: stat.team_win === true || stat.team_win === 1 || stat.team_win === 'true'
+        }
+      }
+    }));
+    
+    res.json({
+      week: parseInt(week),
+      year: parseInt(year),
+      count: scoringReadyStats.length,
+      players: scoringReadyStats,
+      message: 'Stats formatted for scoring engine (league rosters only)'
+    });
+    
+  } catch (error) {
+    console.error('Error formatting league stats for scoring:', error);
+    res.status(500).json({ error: 'Failed to format league stats for scoring' });
   }
 });
 
